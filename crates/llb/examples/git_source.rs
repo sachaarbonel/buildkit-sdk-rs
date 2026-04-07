@@ -8,25 +8,18 @@
 //!   cargo run --example git_source --package buildkit-rs-llb | \
 //!     buildctl build --progress plain --no-cache
 
-use std::io::Write;
-
-use buildkit_rs_llb::*;
+use buildkit_rs_llb::state::*;
 
 fn main() {
     // Clone a Git repository at a specific ref
-    let repo = Git::new("https://github.com/moby/buildkit.git", "v0.12.0")
-        .with_custom_name("clone buildkit repository");
-
-    // Use an Alpine image to process the cloned source
-    let alpine = Image::new("alpine:latest");
+    let repo = git("https://github.com/moby/buildkit.git", "v0.12.0");
 
     // List the files in the cloned repository
-    let command = Exec::shlex("/bin/sh -c \"ls -la /src && cat /src/README.md\"")
+    let st = image("alpine:latest")
+        .run(shlex("sh -c \"ls -la /src && cat /src/README.md\""))
         .with_custom_name("list repo contents")
-        .with_mount(Mount::layer_readonly(alpine.output(), "/"))
-        .with_mount(Mount::layer_readonly(repo.output(), "/src"));
+        .add_mount("/src", repo)
+        .root();
 
-    // Serialize and write to stdout
-    let definition = Definition::new(command.output(0)).into_bytes();
-    std::io::stdout().write_all(&definition).unwrap();
+    write_to(&st.marshal(), &mut std::io::stdout());
 }

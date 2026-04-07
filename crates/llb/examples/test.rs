@@ -1,17 +1,17 @@
-use std::io::Write;
+//! Simple test example.
+//!
+//! Usage:
+//!   cargo run --example test --package buildkit-rs-llb | \
+//!     buildctl build --progress plain --no-cache
 
-use buildkit_rs_llb::*;
+use buildkit_rs_llb::state::*;
 
 fn main() {
-    let builder_image =
-        Image::new("alpine:latest").with_custom_name("Using alpine:latest as a builder");
-
-    let command = Exec::shlex("/bin/sh -c \"echo 'hello world'\"")
+    let st = image("alpine:latest")
+        .run(shlex("echo 'hello world'"))
         .with_custom_name("create a dummy file")
-        .with_mount(Mount::layer_readonly(builder_image.output(), "/"))
-        .with_mount(Mount::scratch("/out", 0));
+        .add_mount_scratch("/out")
+        .root();
 
-    let a = Definition::new(command.output(0)).into_bytes();
-
-    std::io::stdout().write_all(&a).unwrap();
+    write_to(&st.marshal(), &mut std::io::stdout());
 }

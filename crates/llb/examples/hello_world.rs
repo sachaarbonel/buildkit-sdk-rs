@@ -9,20 +9,13 @@
 //!   cargo run --example hello_world --package buildkit-rs-llb | \
 //!     buildctl build --progress plain --no-cache
 
-use std::io::Write;
-
-use buildkit_rs_llb::*;
+use buildkit_rs_llb::state::*;
 
 fn main() {
-    // Pull an Alpine image as the base
-    let alpine = Image::new("alpine:latest");
-
-    // Run a simple echo command
-    let command = Exec::shlex("/bin/sh -c \"echo 'hello world'\"")
+    let st = image("alpine:latest")
+        .run(shlex("echo 'hello world'"))
         .with_custom_name("echo hello world")
-        .with_mount(Mount::layer_readonly(alpine.output(), "/"));
+        .root();
 
-    // Serialize and write to stdout
-    let definition = Definition::new(command.output(0)).into_bytes();
-    std::io::stdout().write_all(&definition).unwrap();
+    write_to(&st.marshal(), &mut std::io::stdout());
 }
