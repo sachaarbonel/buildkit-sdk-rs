@@ -63,7 +63,10 @@ pub struct Session {
 }
 
 #[derive(Debug)]
-pub struct Client(ControlClient<Channel>);
+pub struct Client {
+    control: ControlClient<Channel>,
+    backend: OciBackend,
+}
 
 impl Client {
     pub async fn connect(backend: OciBackend, container_name: String) -> Result<Client, Error> {
@@ -80,15 +83,21 @@ impl Client {
             }))
             .await?;
 
-        Ok(Client(ControlClient::new(channel)))
+        Ok(Client {
+            control: ControlClient::new(channel),
+            backend,
+        })
     }
 
     pub async fn info(&mut self) -> Result<InfoResponse, tonic::Status> {
-        self.0.info(InfoRequest {}).await.map(Response::into_inner)
+        self.control
+            .info(InfoRequest {})
+            .await
+            .map(Response::into_inner)
     }
 
     pub async fn disk_usage(&mut self) -> Result<DiskUsageResponse, tonic::Status> {
-        self.0
+        self.control
             .disk_usage(DiskUsageRequest {
                 filter: vec![],
                 ..Default::default()
@@ -98,7 +107,7 @@ impl Client {
     }
 
     pub async fn list_workers(&mut self) -> Result<ListWorkersResponse, tonic::Status> {
-        self.0
+        self.control
             .list_workers(ListWorkersRequest { filter: vec![] })
             .await
             .map(Response::into_inner)
@@ -124,7 +133,7 @@ impl Client {
 
         let json = serde_json::to_string(&image_config).unwrap();
 
-        self.0
+        self.control
             .solve(Request::new(
                 buildkit_rs_proto::moby::buildkit::v1::SolveRequest {
                     r#ref: options.id,
@@ -160,7 +169,7 @@ impl Client {
 
         let auth = AuthService::new().into_server();
         let file_sync = FileSyncService::new(options.local).into_server();
-        let file_send = FileSendService::new().into_server();
+        let file_send = FileSendService::new(self.backend).into_server();
         let secret = SecretService::new(options.secrets).into_server();
 
         health_reporter
@@ -248,7 +257,7 @@ impl Client {
             .metadata_mut()
             .append(HEADER_SESSION_ID, id.parse().expect("valid header value"));
 
-        // Map the name to a valid header value so we make sure it doenst panic
+        // Map the name to a valid header value so we make sure it doesn't panic
         let header_name_bytes = options
             .name
             .bytes()
@@ -323,7 +332,7 @@ impl Client {
                 .expect("valid header value"),
         );
 
-        let res = self.0.session(request).await?;
+        let res = self.control.session(request).await?;
 
         tokio::spawn(async move {
             let mut inner = res.into_inner();
@@ -354,7 +363,7 @@ impl Client {
     }
 
     pub async fn status(&mut self, id: String) -> Result<Streaming<StatusResponse>, Status> {
-        self.0
+        self.control
             .status(StatusRequest { r#ref: id })
             .await
             .map(Response::into_inner)
@@ -374,14 +383,14 @@ mod tests {
         }
         tracing_subscriber::fmt::init();
 
-        let mut conn = Client::connect(OciBackend::Docker, "cicada-buildkitd".to_owned())
+        let mut conn = Client::connect(OciBackend::Docker, "buildkitd".to_owned())
             .await
             .unwrap();
         dbg!(conn.info().await.unwrap());
 
         let _session = conn
             .session(SessionOptions {
-                name: "cicada".into(),
+                name: "buildkit-rs".into(),
                 ..Default::default()
             })
             .await

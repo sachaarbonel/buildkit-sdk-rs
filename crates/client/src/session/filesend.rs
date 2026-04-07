@@ -2,16 +2,19 @@ use buildkit_rs_proto::moby::filesync::v1::{
     BytesMessage,
     file_send_server::{FileSend, FileSendServer},
 };
+use buildkit_rs_util::oci::OciBackend;
 use tokio::io::AsyncWriteExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Response, Status};
-use tracing::info;
+use tracing::{error, info};
 
-pub(crate) struct FileSendService {}
+pub(crate) struct FileSendService {
+    backend: OciBackend,
+}
 
 impl FileSendService {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(backend: OciBackend) -> Self {
+        Self { backend }
     }
 
     pub fn into_server(self) -> FileSendServer<Self> {
@@ -31,21 +34,47 @@ impl FileSend for FileSendService {
 
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         let stream = request.into_inner();
+        let backend = self.backend;
 
         tokio::spawn(async move {
-            let mut docker_load = tokio::process::Command::new("docker")
+            let command = backend.as_str();
+            let mut load_process = match tokio::process::Command::new(command)
                 .arg("load")
                 .stdin(std::process::Stdio::piped())
                 .spawn()
-                .unwrap();
+            {
+                Ok(child) => child,
+                Err(err) => {
+                    error!(?err, %command, "failed to spawn image load process");
+                    return;
+                }
+            };
 
-            let mut docker_load_stdin = docker_load.stdin.take().unwrap();
+            let mut load_stdin = match load_process.stdin.take() {
+                Some(stdin) => stdin,
+                None => {
+                    error!("failed to capture stdin of image load process");
+                    return;
+                }
+            };
 
             let _tx = tx;
             let mut stream = stream;
-            while let Some(message) = stream.message().await.unwrap() {
-                let data = message.data;
-                docker_load_stdin.write_all(&data).await.unwrap();
+            loop {
+                match stream.message().await {
+                    Ok(Some(message)) => {
+                        let data = message.data;
+                        if let Err(err) = load_stdin.write_all(&data).await {
+                            error!(?err, "failed to write to image load process");
+                            return;
+                        }
+                    }
+                    Ok(None) => break,
+                    Err(err) => {
+                        error!(?err, "failed to read from stream");
+                        return;
+                    }
+                }
             }
         });
 
