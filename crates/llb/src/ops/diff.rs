@@ -73,7 +73,6 @@ impl Operation for Diff<'_> {
                 digest: node.digest.clone(),
                 index: upper.output().into(),
             });
-            let _ = idx;
             Some(pb::UpperDiffInput { input: idx })
         } else {
             Some(pb::UpperDiffInput { input: -1 })

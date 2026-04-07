@@ -125,7 +125,9 @@ impl<'a> Copy<'a> {
             include_patterns: self.include_patterns.clone(),
             exclude_patterns: self.exclude_patterns.clone(),
             always_replace_existing_dest_paths: self.always_replace_existing_dest_paths,
+            // mode_str is the non-octal string representation of mode; we use the integer mode field instead
             mode_str: String::new(),
+            // required_paths is only used when include_patterns is non-empty; left empty for now
             required_paths: Vec::new(),
         }
     }
