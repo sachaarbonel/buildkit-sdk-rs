@@ -333,6 +333,8 @@ impl ExecState {
             dest: dest.into(),
             kind: ExtraMountKind::Readonly(src),
         });
+        // Safety: `mut self` guarantees exclusive ownership, so no aliased
+        // references to the old OnceLock value can exist.
         self.built = OnceLock::new();
         self
     }
@@ -348,6 +350,7 @@ impl ExecState {
             dest: dest.into(),
             kind: ExtraMountKind::Scratch,
         });
+        // Safety: `mut self` guarantees exclusive ownership.
         self.built = OnceLock::new();
         self
     }
@@ -366,6 +369,7 @@ impl ExecState {
                 sharing,
             },
         });
+        // Safety: `mut self` guarantees exclusive ownership.
         self.built = OnceLock::new();
         self
     }
@@ -373,6 +377,7 @@ impl ExecState {
     /// Set a custom display name for this exec operation.
     pub fn with_custom_name(mut self, name: impl AsRef<str>) -> Self {
         self.custom_name = Some(name.as_ref().to_string());
+        // Safety: `mut self` guarantees exclusive ownership.
         self.built = OnceLock::new();
         self
     }
@@ -772,6 +777,10 @@ pub fn symlink(oldpath: impl Into<String>, newpath: impl Into<String>) -> Symlin
 /// or other writers.
 ///
 /// Equivalent to Go's `llb.WriteTo(def, os.Stdout)`.
+///
+/// # Panics
+///
+/// Panics if writing to the writer fails.
 pub fn write_to(data: &[u8], w: &mut impl Write) {
-    w.write_all(data).unwrap();
+    w.write_all(data).expect("failed to write LLB definition");
 }
