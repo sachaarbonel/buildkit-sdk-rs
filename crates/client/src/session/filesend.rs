@@ -6,7 +6,7 @@ use buildkit_rs_util::oci::OciBackend;
 use tokio::io::AsyncWriteExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Response, Status};
-use tracing::{info, error};
+use tracing::{error, info};
 
 pub(crate) struct FileSendService {
     backend: OciBackend,

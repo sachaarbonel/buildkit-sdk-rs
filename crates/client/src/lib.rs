@@ -90,7 +90,10 @@ impl Client {
     }
 
     pub async fn info(&mut self) -> Result<InfoResponse, tonic::Status> {
-        self.control.info(InfoRequest {}).await.map(Response::into_inner)
+        self.control
+            .info(InfoRequest {})
+            .await
+            .map(Response::into_inner)
     }
 
     pub async fn disk_usage(&mut self) -> Result<DiskUsageResponse, tonic::Status> {
