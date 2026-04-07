@@ -230,6 +230,8 @@ impl Mount<'_> {
                 }),
                 _ => None,
             },
+
+            content_cache: 0,
         }
     }
 }

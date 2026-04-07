@@ -187,6 +187,7 @@ impl Operation for Exec<'_> {
             network: NetMode::Unset.into(),
             security: SecurityMode::Sandbox.into(),
             secretenv: vec![],
+            cdi_devices: vec![],
         };
 
         Some(Node::new(
