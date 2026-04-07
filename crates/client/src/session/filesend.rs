@@ -60,11 +60,20 @@ impl FileSend for FileSendService {
 
             let _tx = tx;
             let mut stream = stream;
-            while let Ok(Some(message)) = stream.message().await {
-                let data = message.data;
-                if let Err(err) = load_stdin.write_all(&data).await {
-                    error!(?err, "failed to write to image load process");
-                    return;
+            loop {
+                match stream.message().await {
+                    Ok(Some(message)) => {
+                        let data = message.data;
+                        if let Err(err) = load_stdin.write_all(&data).await {
+                            error!(?err, "failed to write to image load process");
+                            return;
+                        }
+                    }
+                    Ok(None) => break,
+                    Err(err) => {
+                        error!(?err, "failed to read from stream");
+                        return;
+                    }
                 }
             }
         });
