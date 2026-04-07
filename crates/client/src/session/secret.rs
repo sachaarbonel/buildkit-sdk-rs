@@ -1,8 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use buildkit_rs_proto::moby::buildkit::secrets::v1::{
-    secrets_server::{Secrets, SecretsServer},
     GetSecretRequest, GetSecretResponse,
+    secrets_server::{Secrets, SecretsServer},
 };
 use tonic::{Request, Response, Status};
 

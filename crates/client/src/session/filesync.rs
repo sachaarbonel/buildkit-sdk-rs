@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use buildkit_rs_proto::{
-    fsutil::types::{packet::PacketType, Packet, Stat},
+    fsutil::types::{Packet, Stat, packet::PacketType},
     moby::filesync::v1::file_sync_server::{FileSync, FileSyncServer},
 };
 use tokio::io::AsyncReadExt;
@@ -51,7 +51,7 @@ impl FileSync for FileSyncService {
         let dir_name = match request.metadata().get(KEY_DIR_NAME).map(|v| v.to_str()) {
             Some(Ok(dir_name)) => dir_name,
             Some(Err(e)) => {
-                return Err(Status::invalid_argument(format!("invalid dir-name: {}", e)))
+                return Err(Status::invalid_argument(format!("invalid dir-name: {}", e)));
             }
             None => return Err(Status::invalid_argument("missing dir-name in metadata")),
         };

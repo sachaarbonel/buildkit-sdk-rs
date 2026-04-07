@@ -44,7 +44,7 @@ pub fn read_ignore_to_list<R: Read>(reader: R) -> Result<Vec<String>, Error> {
         if !pattern.is_empty() {
             pattern = clean(&pattern)
                 .to_str()
-                .ok_or_else(|| Error::NonUtf8Pattern)?
+                .ok_or(Error::NonUtf8Pattern)?
                 .to_owned();
             if pattern.starts_with('/') {
                 pattern = pattern[1..].to_string();

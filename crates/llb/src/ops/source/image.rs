@@ -1,18 +1,19 @@
 use std::{collections::HashMap, sync::Arc};
 
-use buildkit_rs_proto::pb::{self, op::Op as OpEnum, Op};
+use buildkit_rs_proto::pb::{self, Op, op::Op as OpEnum};
 use buildkit_rs_reference::Reference;
 
 use crate::{
     ops::{
-        metadata::{attr::Attr, OpMetadata, OpMetadataBuilder},
+        metadata::{OpMetadata, OpMetadataBuilder, attr::Attr},
         output::{SingleBorrowedOutput, SingleOwnedOutput},
     },
+    platform::Platform,
     serialize::{
         id::OperationId,
         node::{Context, Node, Operation},
     },
-    utils::{OperationOutput, OutputIdx}, platform::Platform,
+    utils::{OperationOutput, OutputIdx},
 };
 
 #[derive(Debug, Clone, Copy, Default)]

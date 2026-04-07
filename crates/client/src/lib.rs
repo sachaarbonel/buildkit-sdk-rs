@@ -11,8 +11,8 @@ use buildkit_rs_llb::Definition;
 use buildkit_rs_proto::moby::buildkit::secrets::v1::secrets_server::SecretsServer;
 use buildkit_rs_proto::moby::buildkit::v1::BytesMessage;
 use buildkit_rs_proto::moby::buildkit::v1::{
-    control_client::ControlClient, DiskUsageRequest, DiskUsageResponse, InfoRequest, InfoResponse,
-    ListWorkersRequest, ListWorkersResponse, SolveResponse,
+    DiskUsageRequest, DiskUsageResponse, InfoRequest, InfoResponse, ListWorkersRequest,
+    ListWorkersResponse, SolveResponse, control_client::ControlClient,
 };
 use buildkit_rs_proto::moby::buildkit::v1::{StatusRequest, StatusResponse};
 use buildkit_rs_proto::moby::filesync::v1::auth_server::AuthServer;
@@ -28,8 +28,8 @@ use session::{auth::AuthService, filesync::FileSyncService};
 use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 use tonic::{
-    transport::{Channel, Uri},
     Request, Response,
+    transport::{Channel, Uri},
 };
 use tonic::{Status, Streaming};
 use tower::ServiceBuilder;

@@ -1,6 +1,6 @@
 use buildkit_rs_proto::moby::filesync::v1::{
-    file_send_server::{FileSend, FileSendServer},
     BytesMessage,
+    file_send_server::{FileSend, FileSendServer},
 };
 use tokio::io::AsyncWriteExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -40,7 +40,7 @@ impl FileSend for FileSendService {
                 .unwrap();
 
             let mut docker_load_stdin = docker_load.stdin.take().unwrap();
-            
+
             let _tx = tx;
             let mut stream = stream;
             while let Some(message) = stream.message().await.unwrap() {

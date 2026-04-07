@@ -24,7 +24,10 @@ mod tests {
     #[test]
     fn test_default_path_env_unix() {
         let path = default_path_env(OsFamily::Unix);
-        assert_eq!(path, "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
+        assert_eq!(
+            path,
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        );
         assert!(path.contains("/usr/local/bin"));
         assert!(path.contains("/usr/bin"));
     }
@@ -49,7 +52,10 @@ mod tests {
 
     #[test]
     fn test_default_path_env_windows_constant() {
-        assert_eq!(DEFAULT_PATH_ENV_WINDOWS, "c:\\Windows\\System32;c:\\Windows");
+        assert_eq!(
+            DEFAULT_PATH_ENV_WINDOWS,
+            "c:\\Windows\\System32;c:\\Windows"
+        );
         // Windows paths are semicolon-separated
         let parts: Vec<&str> = DEFAULT_PATH_ENV_WINDOWS.split(';').collect();
         assert_eq!(parts.len(), 2);

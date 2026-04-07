@@ -1,7 +1,7 @@
 use crate::{
+    Error,
     consts::{DEFAULT_DOMAIN, LEGACY_DEFAULT_DOMAIN, NAME_TOTAL_LENGTH_MAX, OFFICIAL_REPO_PREFIX},
     regex::{ANCHORED_IDENTIFIER_REGEXP, ANCHORED_NAME_REGEXP, REFERENCE_REGEX},
-    Error,
 };
 use std::{borrow::Cow, cmp::Ordering, fmt};
 
@@ -35,7 +35,7 @@ impl Repository {
     /// Normalizes the path of the repository if it is an official repository
     ///
     /// (i.e. `library/foo` -> `foo`)
-    pub fn normalized_path(&self) -> Option<Cow<str>> {
+    pub fn normalized_path(&self) -> Option<Cow<'_, str>> {
         let path = self.path.as_deref()?;
         if matches!(
             self.domain.as_deref(),
@@ -95,9 +95,9 @@ impl Reference {
                 return Err(Error::NameEmpty);
             }
             if REFERENCE_REGEX.captures(&s.to_lowercase()).is_some() {
-                return Err(Error::NameContainsUppercase)
+                return Err(Error::NameContainsUppercase);
             }
-            return Err(Error::InvalidReferenceFormat)
+            return Err(Error::InvalidReferenceFormat);
         };
 
         if matches.get(0).unwrap().as_str().len() > NAME_TOTAL_LENGTH_MAX {
@@ -111,7 +111,7 @@ impl Reference {
                 .as_str(),
         );
         let Some(name_match) = name_match else {
-            return Err(Error::InvalidReferenceFormat)
+            return Err(Error::InvalidReferenceFormat);
         };
 
         let repo = match name_match.get(1) {
@@ -163,7 +163,7 @@ impl Reference {
     }
 
     /// Returns the path of the reference, normalized if it is an official repository
-    pub fn path(&self) -> Option<Cow<str>> {
+    pub fn path(&self) -> Option<Cow<'_, str>> {
         self.repository.normalized_path()
     }
 
@@ -194,11 +194,7 @@ impl Reference {
         let get_order = |r: &Reference| {
             if r.repository.path.is_some() {
                 if r.tag.is_some() {
-                    if r.digest.is_some() {
-                        1
-                    } else {
-                        2
-                    }
+                    if r.digest.is_some() { 1 } else { 2 }
                 } else if r.digest.is_some() {
                     3
                 } else {
@@ -464,7 +460,10 @@ mod test {
             tag: None,
             digest: Some("sha256:abcdef".into()),
         };
-        assert_eq!(r_digest.to_string(), "docker.io/library/alpine@sha256:abcdef");
+        assert_eq!(
+            r_digest.to_string(),
+            "docker.io/library/alpine@sha256:abcdef"
+        );
     }
 
     #[test]
