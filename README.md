@@ -19,7 +19,7 @@ This is a Rust client library for buildkit.
 ### Planned crates
 
 - [buildkit-rs-client](/) - A high level client library for buildkit exposing a
-  simmilar API to the Go client
+  similar API to the Go client
 - [buildkit-rs-dockerfile](/) - A library for parsing and converting Dockerfiles
   to LLB (this is mostly for validation and testing, not for production use)
 
@@ -43,7 +43,7 @@ In order of importance:
 - Provide a simple, safe, and fast buildkit client library for Rust
 - Make the API idiomatic Rust
 - Provide other utilities for building applications that use buildkit in Rust
-- Keeping the API simmilar to the buildkit Go client API
+- Keeping the API similar to the buildkit Go client API
 - Keeping the code modular as to allow easy opt-in for features
 - No unsafe code
 
@@ -60,8 +60,7 @@ Rust client library for buildkit.
 
 It is a similar project, we did draw some inspiration from its API, but it is
 not maintained anymore and it is not compatible with the latest buildkit
-version. This project is backed by [Cicada](https://cicada.build) and which
-comes first when it comes to priorities.
+version.
 
 ### Why not use the [buildkit Go client](https://github.com/moby/buildkit) directly?
 
@@ -82,5 +81,4 @@ Any contributions are welcome! If you are interested in contributing, please
 open an issue or a PR as soon as possible so we can discuss it and ensure it
 fits the goals of the project + we can avoid duplicate work.
 
-We also are welcome to discuss the project in the
-[Cicada Discord](https://cicada.build/discord) in the `#buildkit-rs` channel.
+We also welcome discussions in the project's GitHub issues and pull requests.

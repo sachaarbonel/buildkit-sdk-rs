@@ -22,7 +22,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-authors = ["Grant Gurvis", "cicada.build"]
-homepage = "https://cicada.build"
+authors = ["Grant Gurvis"]
+homepage = "https://github.com/sachaarbonel/buildkit-sdk-rs"
 license = "Apache-2.0 OR MIT"
-repository = "http://github.com/cicadahq/buildkit-rs"
+repository = "https://github.com/sachaarbonel/buildkit-sdk-rs"
