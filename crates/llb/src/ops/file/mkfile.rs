@@ -6,31 +6,35 @@ use crate::utils::OperationOutput;
 use super::FileAction;
 use super::chown::ChownOpt;
 
-/// Create a directory.
+/// Create a new file with specified contents.
 #[derive(Debug)]
-pub struct Mkdir<'a> {
+pub struct MkFile<'a> {
     pub(crate) path: Utf8PathBuf,
     pub(crate) input: OperationOutput<'a>,
-    make_parents: bool,
-    owner: Option<ChownOpt>,
     mode: i32,
+    data: Vec<u8>,
+    owner: Option<ChownOpt>,
     timestamp: i64,
 }
 
-impl<'a> Mkdir<'a> {
-    pub fn new(path: impl Into<Utf8PathBuf>, input: OperationOutput<'a>) -> Self {
+impl<'a> MkFile<'a> {
+    pub fn new(
+        path: impl Into<Utf8PathBuf>,
+        input: OperationOutput<'a>,
+        data: impl Into<Vec<u8>>,
+    ) -> Self {
         Self {
             path: path.into(),
             input,
-            make_parents: false,
+            mode: 0o644,
+            data: data.into(),
             owner: None,
-            mode: 0o755,
             timestamp: -1,
         }
     }
 
-    pub fn with_make_parents(mut self, make_parents: bool) -> Self {
-        self.make_parents = make_parents;
+    pub fn with_mode(mut self, mode: i32) -> Self {
+        self.mode = mode;
         self
     }
 
@@ -39,29 +43,24 @@ impl<'a> Mkdir<'a> {
         self
     }
 
-    pub fn with_mode(mut self, mode: i32) -> Self {
-        self.mode = mode;
-        self
-    }
-
     pub fn with_timestamp(mut self, timestamp: i64) -> Self {
         self.timestamp = timestamp;
         self
     }
 
-    pub(crate) fn to_pb(&self) -> pb::FileActionMkDir {
-        pb::FileActionMkDir {
+    pub(crate) fn to_pb(&self) -> pb::FileActionMkFile {
+        pb::FileActionMkFile {
             path: self.path.to_string(),
             mode: self.mode,
-            make_parents: self.make_parents,
+            data: self.data.clone(),
             owner: self.owner.as_ref().map(|o| o.to_pb()),
             timestamp: self.timestamp,
         }
     }
 }
 
-impl<'a> From<Mkdir<'a>> for FileAction<'a> {
-    fn from(mkdir: Mkdir<'a>) -> Self {
-        Self::Mkdir(mkdir)
+impl<'a> From<MkFile<'a>> for FileAction<'a> {
+    fn from(mkfile: MkFile<'a>) -> Self {
+        Self::MkFile(mkfile)
     }
 }

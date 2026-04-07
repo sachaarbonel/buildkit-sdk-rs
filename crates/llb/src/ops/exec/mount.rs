@@ -138,6 +138,27 @@ impl Mount<'_> {
         }
     }
 
+    pub fn ssh(
+        dest: impl Into<Utf8PathBuf>,
+        id: impl Into<String>,
+        uid: u32,
+        gid: u32,
+        mode: u32,
+        optional: bool,
+    ) -> Mount<'static> {
+        Mount {
+            dest: dest.into(),
+            mount_type: MountType::Ssh {
+                id: id.into(),
+                uid,
+                gid,
+                mode,
+                optional,
+            },
+            selector: None,
+        }
+    }
+
     pub fn with_selector(mut self, selector: impl Into<String>) -> Self {
         self.selector = Some(selector.into());
         self
