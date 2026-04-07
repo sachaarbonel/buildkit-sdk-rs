@@ -404,4 +404,110 @@ mod test {
             "docker.io/library/busybox:latest@sha256:86e0e091d0da6bde2456dbb48306f3956bbeb2eae1b5b9a43045843f69fe4aaa"
         );
     }
+
+    #[test]
+    fn test_parse_simple_image() {
+        let r = Reference::parse("docker.io/library/alpine").unwrap();
+        assert_eq!(r.repository.domain.as_deref(), Some("docker.io"));
+        assert_eq!(r.repository.path.as_deref(), Some("library/alpine"));
+        assert!(r.tag.is_none());
+        assert!(r.digest.is_none());
+    }
+
+    #[test]
+    fn test_parse_image_with_tag() {
+        let r = Reference::parse("docker.io/library/alpine:3.18").unwrap();
+        assert_eq!(r.repository.domain.as_deref(), Some("docker.io"));
+        assert_eq!(r.repository.path.as_deref(), Some("library/alpine"));
+        assert_eq!(r.tag.as_deref(), Some("3.18"));
+        assert!(r.digest.is_none());
+    }
+
+    #[test]
+    fn test_parse_image_with_digest() {
+        let r = Reference::parse(
+            "docker.io/library/alpine@sha256:86e0e091d0da6bde2456dbb48306f3956bbeb2eae1b5b9a43045843f69fe4aaa",
+        )
+        .unwrap();
+        assert_eq!(r.repository.domain.as_deref(), Some("docker.io"));
+        assert_eq!(r.repository.path.as_deref(), Some("library/alpine"));
+        assert!(r.tag.is_none());
+        assert_eq!(
+            r.digest.as_deref(),
+            Some("sha256:86e0e091d0da6bde2456dbb48306f3956bbeb2eae1b5b9a43045843f69fe4aaa")
+        );
+    }
+
+    #[test]
+    fn test_parse_empty_returns_error() {
+        let result = Reference::parse("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_display_formatting() {
+        let r = Reference {
+            repository: Repository {
+                domain: Some("docker.io".into()),
+                path: Some("library/alpine".into()),
+            },
+            tag: Some("latest".into()),
+            digest: None,
+        };
+        assert_eq!(r.to_string(), "docker.io/library/alpine:latest");
+
+        let r_digest = Reference {
+            repository: Repository {
+                domain: Some("docker.io".into()),
+                path: Some("library/alpine".into()),
+            },
+            tag: None,
+            digest: Some("sha256:abcdef".into()),
+        };
+        assert_eq!(r_digest.to_string(), "docker.io/library/alpine@sha256:abcdef");
+    }
+
+    #[test]
+    fn test_rank_ord() {
+        // Named + Tagged + Digested (rank 1) should come before Named + Tagged (rank 2)
+        let ref_full = Reference {
+            repository: Repository {
+                domain: Some("docker.io".into()),
+                path: Some("library/busybox".into()),
+            },
+            tag: Some("latest".into()),
+            digest: Some("sha256:abcdef".into()),
+        };
+        let ref_tagged = Reference {
+            repository: Repository {
+                domain: Some("docker.io".into()),
+                path: Some("library/busybox".into()),
+            },
+            tag: Some("latest".into()),
+            digest: None,
+        };
+        let ref_named = Reference {
+            repository: Repository {
+                domain: Some("docker.io".into()),
+                path: Some("library/busybox".into()),
+            },
+            tag: None,
+            digest: None,
+        };
+
+        assert_eq!(ref_full.rank_ord(&ref_tagged), Ordering::Less);
+        assert_eq!(ref_tagged.rank_ord(&ref_named), Ordering::Less);
+        assert_eq!(ref_full.rank_ord(&ref_named), Ordering::Less);
+        // Same rank should compare by string
+        assert_eq!(ref_tagged.rank_ord(&ref_tagged), Ordering::Equal);
+    }
+
+    #[test]
+    fn test_domain_and_path_methods() {
+        let r = Reference::parse_normalized_named("alpine:latest").unwrap();
+        assert_eq!(r.domain(), "docker.io");
+        assert_eq!(r.path().unwrap().as_ref(), "library/alpine");
+        assert_eq!(r.tag(), Some("latest"));
+        assert!(r.digest().is_none());
+    }
 }

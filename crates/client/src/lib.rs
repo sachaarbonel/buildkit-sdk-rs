@@ -366,8 +366,12 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore] // Requires a running BuildKit container
     async fn test_connect() {
-        std::env::set_var("RUST_LOG", "debug");
+        // SAFETY: This is only called from a single-threaded test context
+        unsafe {
+            std::env::set_var("RUST_LOG", "debug");
+        }
         tracing_subscriber::fmt::init();
 
         let mut conn = Client::connect(OciBackend::Docker, "cicada-buildkitd".to_owned())
@@ -375,7 +379,7 @@ mod tests {
             .unwrap();
         dbg!(conn.info().await.unwrap());
 
-        let session = conn
+        let _session = conn
             .session(SessionOptions {
                 name: "cicada".into(),
                 ..Default::default()

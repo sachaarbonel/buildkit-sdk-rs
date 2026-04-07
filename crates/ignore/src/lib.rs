@@ -96,4 +96,37 @@ file.txt
         let result = read_ignore_to_list(reader).unwrap();
         assert_eq!(result, vec!["!file.txt", "*.tmp", "!file.txt"]);
     }
+
+    #[test]
+    fn test_all_comments() {
+        let input = "# comment 1\n# comment 2\n# comment 3\n";
+        let reader = Cursor::new(input);
+        let result = read_ignore_to_list(reader).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_whitespace_only_lines() {
+        let input = "   \n\t\n  \t  \n";
+        let reader = Cursor::new(input);
+        let result = read_ignore_to_list(reader).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_absolute_paths() {
+        let input = "/foo\n/bar/baz\n";
+        let reader = Cursor::new(input);
+        let result = read_ignore_to_list(reader).unwrap();
+        // Leading '/' should be stripped
+        assert_eq!(result, vec!["foo", "bar/baz"]);
+    }
+
+    #[test]
+    fn test_leading_trailing_whitespace() {
+        let input = "  file.txt  \n  dir/  \n";
+        let reader = Cursor::new(input);
+        let result = read_ignore_to_list(reader).unwrap();
+        assert_eq!(result, vec!["file.txt", "dir"]);
+    }
 }

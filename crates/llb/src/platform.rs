@@ -101,4 +101,56 @@ mod tests {
         assert_eq!(Platform::DARWIN.to_string(), "darwin/amd64");
         assert_eq!(Platform::WINDOWS.to_string(), "windows/amd64");
     }
+
+    #[test]
+    fn test_platform_from_str() {
+        let p: Platform = "linux/amd64".parse().unwrap();
+        assert_eq!(p.os, "linux");
+        assert_eq!(p.architecture, "amd64");
+        assert!(p.variant.is_none());
+
+        let p: Platform = "linux/arm-v7".parse().unwrap();
+        assert_eq!(p.os, "linux");
+        assert_eq!(p.architecture, "arm");
+        assert_eq!(p.variant.as_deref(), Some("v7"));
+    }
+
+    #[test]
+    fn test_platform_to_pb() {
+        let pb = Platform::LINUX_AMD64.to_pb();
+        assert_eq!(pb.os, "linux");
+        assert_eq!(pb.architecture, "amd64");
+        assert_eq!(pb.variant, "");
+
+        let pb = Platform::LINUX_ARM.to_pb();
+        assert_eq!(pb.os, "linux");
+        assert_eq!(pb.architecture, "arm");
+        assert_eq!(pb.variant, "v7");
+    }
+
+    #[test]
+    fn test_platform_clone_eq_hash() {
+        use std::collections::HashSet;
+
+        let p = Platform::LINUX_AMD64;
+        let p2 = p.clone();
+        assert_eq!(p, p2);
+
+        let mut set = HashSet::new();
+        set.insert(p.clone());
+        assert!(set.contains(&p2));
+
+        assert_ne!(Platform::LINUX_AMD64, Platform::LINUX_ARM64);
+    }
+
+    #[test]
+    fn test_platform_new() {
+        let p = Platform::new("linux", "riscv64", None);
+        assert_eq!(p.os, "linux");
+        assert_eq!(p.architecture, "riscv64");
+        assert!(p.variant.is_none());
+
+        let p = Platform::new("linux", "arm", Some("v5"));
+        assert_eq!(p.variant.as_deref(), Some("v5"));
+    }
 }
