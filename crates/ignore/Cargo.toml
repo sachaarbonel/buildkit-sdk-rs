@@ -11,4 +11,4 @@ repository.workspace = true
 [dependencies]
 path-clean = "1.0.1"
 regex = "1.8.1"
-thiserror = "1.0.40"
+thiserror = "2"

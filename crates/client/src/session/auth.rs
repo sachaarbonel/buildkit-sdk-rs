@@ -1,7 +1,7 @@
 use buildkit_rs_proto::moby::filesync::v1::{
-    auth_server::AuthServer, CredentialsRequest, CredentialsResponse, FetchTokenRequest,
-    FetchTokenResponse, GetTokenAuthorityRequest, GetTokenAuthorityResponse,
-    VerifyTokenAuthorityRequest, VerifyTokenAuthorityResponse,
+    CredentialsRequest, CredentialsResponse, FetchTokenRequest, FetchTokenResponse,
+    GetTokenAuthorityRequest, GetTokenAuthorityResponse, VerifyTokenAuthorityRequest,
+    VerifyTokenAuthorityResponse, auth_server::AuthServer,
 };
 use tonic::{Request, Response, Status};
 use tracing::debug;
@@ -11,7 +11,7 @@ pub struct AuthService;
 
 impl AuthService {
     pub fn new() -> Self {
-        Self::default()
+        Self
     }
 
     pub fn into_server(self) -> AuthServer<Self> {

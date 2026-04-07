@@ -143,7 +143,7 @@ impl Mount<'_> {
         self
     }
 
-    pub(crate) fn input(&self) -> Option<&OperationOutput> {
+    pub(crate) fn input(&self) -> Option<&OperationOutput<'_>> {
         match &self.mount_type {
             MountType::Layer { input, .. } => Some(input),
             _ => None,
@@ -230,6 +230,8 @@ impl Mount<'_> {
                 }),
                 _ => None,
             },
+
+            content_cache: 0,
         }
     }
 }

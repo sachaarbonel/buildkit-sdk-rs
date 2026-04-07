@@ -50,3 +50,49 @@ impl AsRef<str> for OciBackend {
         self.as_str()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_is_docker() {
+        let backend = OciBackend::default();
+        assert_eq!(backend, OciBackend::Docker);
+    }
+
+    #[test]
+    fn test_debug_formatting() {
+        assert_eq!(format!("{:?}", OciBackend::Docker), "Docker");
+        assert_eq!(format!("{:?}", OciBackend::Podman), "Podman");
+    }
+
+    #[test]
+    fn test_clone_and_partial_eq() {
+        let backend = OciBackend::Docker;
+        let cloned = backend.clone();
+        assert_eq!(backend, cloned);
+
+        let podman = OciBackend::Podman;
+        assert_ne!(backend, podman);
+    }
+
+    #[test]
+    fn test_display() {
+        assert_eq!(OciBackend::Docker.to_string(), "docker");
+        assert_eq!(OciBackend::Podman.to_string(), "podman");
+    }
+
+    #[test]
+    fn test_from_str() {
+        assert_eq!("docker".parse::<OciBackend>().unwrap(), OciBackend::Docker);
+        assert_eq!("podman".parse::<OciBackend>().unwrap(), OciBackend::Podman);
+        assert!("unknown".parse::<OciBackend>().is_err());
+    }
+
+    #[test]
+    fn test_as_ref() {
+        let backend: &str = OciBackend::Docker.as_ref();
+        assert_eq!(backend, "docker");
+    }
+}

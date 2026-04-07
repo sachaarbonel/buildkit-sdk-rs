@@ -442,17 +442,30 @@ mod tests {
 
         test_reference!(
             "registry.com:8080/myapp@sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912",
-            vec![Some("registry.com:8080/myapp"), None, Some("sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912")]
+            vec![
+                Some("registry.com:8080/myapp"),
+                None,
+                Some("sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912")
+            ]
         );
         test_reference!("registry.com:8080/myapp@sha256:badbadbadbad");
         test_reference!("registry.com:8080/myapp:invalid~tag");
         test_reference!("bad_hostname.com:8080/myapp:tag");
         test_reference!(
-            "localhost:8080@sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912", 
-            vec![Some("localhost"), Some("8080"), Some("sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912")]
+            "localhost:8080@sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912",
+            vec![
+                Some("localhost"),
+                Some("8080"),
+                Some("sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912")
+            ]
         );
-        test_reference!("localhost:8080/name@sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912",
-            vec![Some("localhost:8080/name"), None, Some("sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912")]
+        test_reference!(
+            "localhost:8080/name@sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912",
+            vec![
+                Some("localhost:8080/name"),
+                None,
+                Some("sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912")
+            ]
         );
         test_reference!(
             "localhost@sha256:be178c0543eb17f5f3043021c9e5fcf30285e557a4fc309cce97ff9ca6182912",

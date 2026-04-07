@@ -5,9 +5,8 @@
 //! want to use only a subset of the SDK.
 
 pub use buildkit_rs_client as client;
+pub use buildkit_rs_ignore as ignore;
 pub use buildkit_rs_llb as llb;
 pub use buildkit_rs_proto as proto;
 pub use buildkit_rs_reference as reference;
-pub use buildkit_rs_ignore as ignore;
 pub use buildkit_rs_util as util;
-

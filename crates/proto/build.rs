@@ -6,16 +6,19 @@ fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=build.rs");
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
-    let includes = ["vendor", "vendor/github.com/tonistiigi/fsutil/types"];
+    let includes = [
+        "vendor".to_string(),
+        "vendor/github.com/tonistiigi/fsutil/types".to_string(),
+    ];
 
     let protos = [
         format!("{BUILDKIT_DIR}/frontend/gateway/pb/gateway.proto"),
         format!("{BUILDKIT_DIR}/api/services/control/control.proto"),
     ];
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(false)
-        .compile(&protos, &includes)?;
+        .compile_protos(&protos, &includes)?;
 
     for (session_type, pkg_name) in [
         ("auth", "moby.filesync.v1"),
@@ -26,9 +29,9 @@ fn main() -> Result<()> {
             "{BUILDKIT_DIR}/session/{session_type}/{session_type}.proto"
         )];
 
-        tonic_build::configure()
+        tonic_prost_build::configure()
             .build_client(false)
-            .compile(&protos, &includes)?;
+            .compile_protos(&protos, &includes)?;
 
         // Move the generated files to a new location
         let src = out_dir.join(format!("{pkg_name}.rs"));

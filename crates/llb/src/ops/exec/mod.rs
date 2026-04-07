@@ -1,14 +1,14 @@
 use std::{borrow::Cow, sync::Arc};
 
-use buildkit_rs_proto::pb::{self, op::Op as OpEnum, ExecOp, Meta, NetMode, Op, SecurityMode};
+use buildkit_rs_proto::pb::{self, ExecOp, Meta, NetMode, Op, SecurityMode, op::Op as OpEnum};
 
 use crate::{
+    MultiBorrowedOutput, MultiOwnedOutput, OpMetadataBuilder,
     serialize::{
         id::OperationId,
         node::{Context, Node, Operation},
     },
     utils::{OperationOutput, OutputIdx},
-    MultiBorrowedOutput, MultiOwnedOutput, OpMetadataBuilder,
 };
 
 use super::metadata::OpMetadata;
@@ -187,6 +187,7 @@ impl Operation for Exec<'_> {
             network: NetMode::Unset.into(),
             security: SecurityMode::Sandbox.into(),
             secretenv: vec![],
+            cdi_devices: vec![],
         };
 
         Some(Node::new(
@@ -210,7 +211,7 @@ impl OpMetadataBuilder for Exec<'_> {
     }
 }
 
-impl<'a, 'b: 'a> MultiBorrowedOutput<'b> for Exec<'b> {
+impl<'b> MultiBorrowedOutput<'b> for Exec<'b> {
     fn output(&'b self, index: u32) -> OperationOutput<'b> {
         // TODO: check if the requested index available.
         OperationOutput::borrowed(self, OutputIdx(index))

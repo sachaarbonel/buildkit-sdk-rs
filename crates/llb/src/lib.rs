@@ -1,12 +1,15 @@
+// Allow dead code for WIP/incomplete functionality (file ops, sourcemap, etc.)
+#![allow(dead_code)]
+
 mod ops;
 mod platform;
 mod serialize;
 mod sourcemap;
 pub mod utils;
 
+pub use ops::exec::Exec;
 pub use ops::exec::mount::CacheSharingMode;
 pub use ops::exec::mount::Mount;
-pub use ops::exec::Exec;
 pub use ops::metadata::OpMetadataBuilder;
 pub use ops::output::{
     MultiBorrowedLastOutput, MultiBorrowedOutput, MultiOwnedLastOutput, MultiOwnedOutput,

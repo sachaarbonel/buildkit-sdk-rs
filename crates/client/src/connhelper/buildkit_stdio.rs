@@ -30,6 +30,7 @@ impl BuildkitStdio {
         }
     }
 
+    #[allow(dead_code)]
     async fn kill(&mut self) -> Result<()> {
         self.stdin.shutdown().await?;
         self.child.kill().await?;

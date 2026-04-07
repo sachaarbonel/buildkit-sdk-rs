@@ -3,17 +3,17 @@ mod mkdir;
 
 use std::sync::Arc;
 
-use buildkit_rs_proto::pb::{op::Op as OpEnum, FileOp, Op};
+use buildkit_rs_proto::pb::{FileOp, Op, op::Op as OpEnum};
 use copy::Copy;
 use mkdir::Mkdir;
 
 use crate::{
+    MultiBorrowedOutput, MultiOwnedOutput, OpMetadataBuilder,
     serialize::{
         id::OperationId,
         node::{Context, Node, Operation},
     },
     utils::{OperationOutput, OutputIdx},
-    MultiBorrowedOutput, MultiOwnedOutput, OpMetadataBuilder,
 };
 
 use super::metadata::OpMetadata;
@@ -49,7 +49,7 @@ impl<'a> FileActions<'a> {
     }
 }
 
-impl<'a, 'b: 'a> MultiBorrowedOutput<'b> for FileActions<'b> {
+impl<'b> MultiBorrowedOutput<'b> for FileActions<'b> {
     fn output(&'b self, index: u32) -> OperationOutput<'b> {
         // TODO: check if the requested index available.
         OperationOutput::borrowed(self, OutputIdx(index))

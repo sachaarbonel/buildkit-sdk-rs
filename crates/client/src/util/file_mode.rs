@@ -51,6 +51,52 @@ bitflags! {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bitflags_combination() {
+        let mode = FileMode::USER_READ | FileMode::USER_WRITE | FileMode::USER_EXE;
+        assert!(mode.contains(FileMode::USER_READ));
+        assert!(mode.contains(FileMode::USER_WRITE));
+        assert!(mode.contains(FileMode::USER_EXE));
+        assert!(!mode.contains(FileMode::GROUP_READ));
+    }
+
+    #[test]
+    fn test_permission_mask() {
+        let all_perms = FileMode::MODE_PERM_MASK;
+        // 0o777 = 0x1ff = 511
+        assert_eq!(all_perms.bits(), 0o777);
+        assert!(all_perms.contains(FileMode::USER_READ));
+        assert!(all_perms.contains(FileMode::USER_WRITE));
+        assert!(all_perms.contains(FileMode::USER_EXE));
+        assert!(all_perms.contains(FileMode::GROUP_READ));
+        assert!(all_perms.contains(FileMode::GROUP_WRITE));
+        assert!(all_perms.contains(FileMode::GROUP_EXE));
+        assert!(all_perms.contains(FileMode::OTHER_READ));
+        assert!(all_perms.contains(FileMode::OTHER_WRITE));
+        assert!(all_perms.contains(FileMode::OTHER_EXE));
+        // Type bits should not be in perm mask
+        assert!(!all_perms.contains(FileMode::MODE_DIR));
+    }
+
+    #[test]
+    fn test_type_mask() {
+        let type_mask = FileMode::MODE_TYPE_MASK;
+        assert!(type_mask.contains(FileMode::MODE_DIR));
+        assert!(type_mask.contains(FileMode::MODE_SYMLINK));
+        assert!(type_mask.contains(FileMode::MODE_NAMED_PIPE));
+        assert!(type_mask.contains(FileMode::MODE_SOCKET));
+        assert!(type_mask.contains(FileMode::MODE_DEVICE));
+        assert!(type_mask.contains(FileMode::MODE_CHAR_DEVICE));
+        assert!(type_mask.contains(FileMode::MODE_IRREGULAR));
+        // Permission bits should not be in type mask
+        assert!(!type_mask.contains(FileMode::USER_READ));
+    }
+}
+
 impl FileMode {
     pub(crate) fn from_metadata(metadata: &Metadata) -> Self {
         let mut mode = Self::empty();

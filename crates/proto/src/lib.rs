@@ -1,3 +1,5 @@
+#![allow(clippy::large_enum_variant)]
+
 /// `github.com/moby/buildkit/solver/pb/ops.proto`
 pub mod pb {
     include!(concat!(env!("OUT_DIR"), "/pb.rs"));

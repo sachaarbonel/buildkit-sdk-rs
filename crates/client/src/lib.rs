@@ -11,8 +11,8 @@ use buildkit_rs_llb::Definition;
 use buildkit_rs_proto::moby::buildkit::secrets::v1::secrets_server::SecretsServer;
 use buildkit_rs_proto::moby::buildkit::v1::BytesMessage;
 use buildkit_rs_proto::moby::buildkit::v1::{
-    control_client::ControlClient, DiskUsageRequest, DiskUsageResponse, InfoRequest, InfoResponse,
-    ListWorkersRequest, ListWorkersResponse, SolveResponse,
+    DiskUsageRequest, DiskUsageResponse, InfoRequest, InfoResponse, ListWorkersRequest,
+    ListWorkersResponse, SolveResponse, control_client::ControlClient,
 };
 use buildkit_rs_proto::moby::buildkit::v1::{StatusRequest, StatusResponse};
 use buildkit_rs_proto::moby::filesync::v1::auth_server::AuthServer;
@@ -21,17 +21,18 @@ use buildkit_rs_util::oci::OciBackend;
 use connhelper::{docker::docker_connect, podman::podman_connect};
 use error::Error;
 use futures::stream::StreamExt;
+use hyper_util::rt::TokioIo;
 use session::filesend::FileSendService;
 use session::secret::SecretSource;
 use session::{auth::AuthService, filesync::FileSyncService};
 use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 use tonic::{
-    transport::{Channel, Uri},
     Request, Response,
+    transport::{Channel, Uri},
 };
 use tonic::{Status, Streaming};
-use tower::{service_fn, ServiceBuilder};
+use tower::ServiceBuilder;
 use tower_http::ServiceBuilderExt;
 use tracing::{debug, info};
 
@@ -67,13 +68,14 @@ pub struct Client(ControlClient<Channel>);
 impl Client {
     pub async fn connect(backend: OciBackend, container_name: String) -> Result<Client, Error> {
         let channel = Channel::from_static("http://[::1]:50051")
-            .connect_with_connector(service_fn(move |_: Uri| {
+            .connect_with_connector(tower::service_fn(move |_: Uri| {
                 let container_name = container_name.clone();
                 async move {
-                    match backend {
+                    let io = match backend {
                         OciBackend::Docker => docker_connect(container_name).await,
                         OciBackend::Podman => podman_connect(container_name).await,
-                    }
+                    }?;
+                    Ok::<_, std::io::Error>(TokioIo::new(io))
                 }
             }))
             .await?;
@@ -87,7 +89,10 @@ impl Client {
 
     pub async fn disk_usage(&mut self) -> Result<DiskUsageResponse, tonic::Status> {
         self.0
-            .disk_usage(DiskUsageRequest { filter: vec![] })
+            .disk_usage(DiskUsageRequest {
+                filter: vec![],
+                ..Default::default()
+            })
             .await
             .map(Response::into_inner)
     }
@@ -128,8 +133,8 @@ impl Client {
                         .into_iter()
                         .collect(),
                     session: options.session,
-                    exporter: "docker".to_owned(),
-                    exporter_attrs: [
+                    exporter_deprecated: "docker".to_owned(),
+                    exporter_attrs_deprecated: [
                         ("name".into(), "test".into()),
                         ("containerimage.config".into(), json),
                     ]
@@ -151,7 +156,7 @@ impl Client {
     pub async fn session(&mut self, options: SessionOptions) -> Result<Session, tonic::Status> {
         let (server_stream, client_stream) = tokio::io::duplex(4096);
 
-        let (mut health_reporter, health_server) = tonic_health::server::health_reporter();
+        let (health_reporter, health_server) = tonic_health::server::health_reporter();
 
         let auth = AuthService::new().into_server();
         let file_sync = FileSyncService::new(options.local).into_server();
@@ -361,8 +366,12 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore] // Requires a running BuildKit container
     async fn test_connect() {
-        std::env::set_var("RUST_LOG", "debug");
+        // SAFETY: This is only called from a single-threaded test context
+        unsafe {
+            std::env::set_var("RUST_LOG", "debug");
+        }
         tracing_subscriber::fmt::init();
 
         let mut conn = Client::connect(OciBackend::Docker, "cicada-buildkitd".to_owned())
@@ -370,7 +379,7 @@ mod tests {
             .unwrap();
         dbg!(conn.info().await.unwrap());
 
-        let session = conn
+        let _session = conn
             .session(SessionOptions {
                 name: "cicada".into(),
                 ..Default::default()
