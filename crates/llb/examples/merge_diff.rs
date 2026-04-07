@@ -10,51 +10,44 @@
 //!   cargo run --example merge_diff --package buildkit-rs-llb | \
 //!     buildctl build --progress plain --no-cache
 
-use std::io::Write;
-
-use buildkit_rs_llb::*;
+use buildkit_rs_llb::state::*;
 
 fn main() {
-    let alpine = Image::new("alpine:latest");
+    let alpine = image("alpine:latest");
 
     // Create first layer: a directory with file_a
-    let layer_a = FileActions::new()
-        .with_action(Mkdir::new("/data", alpine.output()).with_make_parents(true))
-        .with_custom_name("create /data directory");
-    let layer_a = FileActions::new()
-        .with_action(MkFile::new(
-            "/data/file_a.txt",
-            layer_a.output(0),
-            b"contents of file A\n".to_vec(),
-        ))
-        .with_custom_name("create file_a");
+    let layer_a = alpine
+        .clone()
+        .file(
+            mkdir("/data", 0o755)
+                .with_make_parents(true)
+                .with_custom_name("create /data directory"),
+        )
+        .file(
+            mkfile("/data/file_a.txt", 0o644, b"contents of file A\n".to_vec())
+                .with_custom_name("create file_a"),
+        );
 
     // Create second layer: add file_b on top of layer_a
-    let layer_b = FileActions::new()
-        .with_action(MkFile::new(
-            "/data/file_b.txt",
-            layer_a.output(0),
-            b"contents of file B\n".to_vec(),
-        ))
-        .with_custom_name("create file_b");
+    let layer_b = layer_a.clone().file(
+        mkfile("/data/file_b.txt", 0o644, b"contents of file B\n".to_vec())
+            .with_custom_name("create file_b"),
+    );
 
     // Diff: compute only the changes between layer_a and layer_b
     // This will produce a layer containing only file_b.txt
-    let diff = Diff::new(Some(layer_a.output(0)), Some(layer_b.output(0)))
-        .with_custom_name("diff: only new files");
+    let changes = diff(&layer_a, &layer_b);
 
     // Merge: combine the diff (file_b only) with a fresh alpine base
-    let merged =
-        Merge::new(vec![alpine.output(), diff.output()]).with_custom_name("merge diff onto alpine");
+    let merged = merge(vec![alpine, changes]);
 
     // Verify the result
-    let verify = Exec::shlex(
-        "/bin/sh -c \"echo '--- merged contents ---' && ls -la /data/ && cat /data/file_b.txt\"",
-    )
-    .with_custom_name("verify merge result")
-    .with_mount(Mount::layer_readonly(merged.output(), "/"));
+    let st = merged
+        .run(shlex(
+            "sh -c \"echo '--- merged contents ---' && ls -la /data/ && cat /data/file_b.txt\"",
+        ))
+        .with_custom_name("verify merge result")
+        .root();
 
-    // Serialize and write to stdout
-    let definition = Definition::new(verify.output(0)).into_bytes();
-    std::io::stdout().write_all(&definition).unwrap();
+    write_to(&st.marshal(), &mut std::io::stdout());
 }

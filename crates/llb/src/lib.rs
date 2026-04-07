@@ -5,6 +5,7 @@ mod ops;
 mod platform;
 mod serialize;
 mod sourcemap;
+pub mod state;
 pub mod utils;
 
 pub use ops::build::Build;
