@@ -1,7 +1,9 @@
 pub mod connhelper;
-pub(crate) mod error;
+pub mod error;
 pub mod session;
 pub(crate) mod util;
+
+pub use error::Error;
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -19,7 +21,6 @@ use buildkit_rs_proto::moby::filesync::v1::auth_server::AuthServer;
 use buildkit_rs_proto::moby::filesync::v1::file_sync_server::FileSyncServer;
 use buildkit_rs_util::oci::OciBackend;
 use connhelper::{docker::docker_connect, podman::podman_connect};
-use error::Error;
 use futures::stream::StreamExt;
 use hyper_util::rt::TokioIo;
 use session::filesend::FileSendService;
