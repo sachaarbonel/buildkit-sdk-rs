@@ -390,7 +390,59 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::process::Stdio;
+
     use super::*;
+
+    async fn ensure_buildkit_container(container_name: &str) {
+        let _ = tokio::process::Command::new("docker")
+            .args(["rm", "-f", container_name])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await;
+
+        let status = tokio::process::Command::new("docker")
+            .args([
+                "run",
+                "-d",
+                "--name",
+                container_name,
+                "--privileged",
+                "moby/buildkit:latest",
+            ])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await
+            .expect("start buildkit container");
+        assert!(status.success(), "failed to start buildkit container");
+
+        for _ in 0..30 {
+            let output = tokio::process::Command::new("docker")
+                .args(["inspect", "-f", "{{.State.Running}}", container_name])
+                .output()
+                .await
+                .expect("inspect buildkit container");
+            if output.status.success() && String::from_utf8_lossy(&output.stdout).trim() == "true" {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
+        panic!("buildkit container did not become ready");
+    }
+
+    async fn remove_buildkit_container(container_name: &str) {
+        let _ = tokio::process::Command::new("docker")
+            .args(["rm", "-f", container_name])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await;
+    }
 
     #[tokio::test]
     #[ignore] // Requires a running BuildKit container
@@ -418,5 +470,61 @@ mod tests {
 
         // sleep for 5 sec
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires Docker and a BuildKit container
+    async fn dockerfile_frontend_reads_local_dockerfile() {
+        let _ = tracing_subscriber::fmt().try_init();
+
+        let container_name = format!("buildkit-sdk-test-{}", random_id());
+        ensure_buildkit_container(&container_name).await;
+
+        let temp_dir = std::env::temp_dir().join(format!("buildkit-sdk-{}", random_id()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        std::fs::write(
+            temp_dir.join("Dockerfile"),
+            "FROM scratch\nLABEL smoke=\"true\"\n",
+        )
+        .unwrap();
+
+        let result = async {
+            let mut client = Client::connect(OciBackend::Docker, container_name.clone())
+                .await
+                .unwrap();
+
+            let session = client
+                .session(SessionOptions {
+                    name: "dockerfile-smoke".into(),
+                    local: HashMap::<String, PathBuf>::from([
+                        ("context".into(), temp_dir.clone()),
+                        ("dockerfile".into(), temp_dir.clone()),
+                    ]),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+
+            client
+                .solve(SolveOptions {
+                    id: random_id(),
+                    session: session.id,
+                    definition: None,
+                    frontend: "dockerfile.v0".into(),
+                    frontend_attrs: HashMap::from([("filename".into(), "Dockerfile".into())]),
+                    ..Default::default()
+                })
+                .await
+        }
+        .await;
+
+        remove_buildkit_container(&container_name).await;
+        let _ = std::fs::remove_dir_all(&temp_dir);
+
+        assert!(
+            result.is_ok(),
+            "dockerfile frontend solve failed: {:?}",
+            result.err()
+        );
     }
 }

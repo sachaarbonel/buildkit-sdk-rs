@@ -1,24 +1,47 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use buildkit_rs_proto::{
     fsutil::types::{Packet, Stat, packet::PacketType},
     moby::filesync::v1::file_sync_server::{FileSync, FileSyncServer},
 };
-use tokio::io::AsyncReadExt;
-use tokio::sync::mpsc::Sender;
+use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::sync::{Mutex, mpsc::Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::util::file_mode::FileMode;
 
 const KEY_INCLUDE_PATTERNS: &str = "include-patterns";
 const KEY_EXCLUDE_PATTERNS: &str = "exclude-patterns";
-// const KEY_FOLLOW_PATHS: &str = "followpaths";
+const KEY_FOLLOW_PATHS: &str = "followpaths";
 const KEY_DIR_NAME: &str = "dir-name";
 
 const MAX_PACKET_SIZE: usize = 1024 * 1024 * 4;
+
+fn file_can_request_data(mode: u32) -> bool {
+    mode & FileMode::MODE_TYPE_MASK.bits() == 0
+}
+
+async fn read_data_chunks<R: AsyncRead + Unpin>(
+    reader: &mut R,
+    chunk_size: usize,
+) -> std::io::Result<Vec<Vec<u8>>> {
+    let mut chunks = Vec::new();
+    let mut buffer = vec![0; chunk_size];
+
+    loop {
+        let read = reader.read(&mut buffer[..]).await?;
+        if read == 0 {
+            break;
+        }
+        chunks.push(buffer[..read].to_vec());
+    }
+
+    Ok(chunks)
+}
 
 pub struct FileSyncService {
     context: HashMap<String, PathBuf>,
@@ -77,23 +100,24 @@ impl FileSync for FileSyncService {
             .map(Into::into)
             .collect();
 
-        // let follow_paths: Vec<String> = request
-        //     .metadata()
-        //     .get_all(KEY_FOLLOW_PATHS)
-        //     .iter()
-        //     .map(|v| v.to_str().ok())
-        //     .flatten()
-        //     .map(Into::into)
-        //     .collect();
+        let follow_paths: Vec<String> = request
+            .metadata()
+            .get_all(KEY_FOLLOW_PATHS)
+            .iter()
+            .filter_map(|v| v.to_str().ok())
+            .map(Into::into)
+            .collect();
 
         tokio::spawn(async move {
-            let files = walk(
-                &context_path,
+            let files = Arc::new(Mutex::new(HashMap::<u32, PathBuf>::new()));
+            let walker = tokio::spawn(walk(
+                context_path.clone(),
                 tx.clone(),
                 exclude_patterns,
                 include_patterns,
-            )
-            .await;
+                follow_paths,
+                Arc::clone(&files),
+            ));
 
             let mut inner = request.into_inner();
             while let Ok(Some(packet)) = inner.message().await {
@@ -101,11 +125,11 @@ impl FileSync for FileSyncService {
                 match packet.r#type() {
                     PacketType::PacketReq => {
                         let id = packet.id;
-                        let Some(path) = usize::try_from(id)
-                            .ok()
-                            .and_then(|idx| files.get(idx))
-                            .map(|path| context_path.join(path))
-                        else {
+                        let path = {
+                            let mut locked = files.lock().await;
+                            locked.remove(&id)
+                        };
+                        let Some(path) = path else {
                             let message = format!("requested file id {id} is out of range");
                             error!(%id, "{message}");
                             if let Err(err) = tx
@@ -122,7 +146,7 @@ impl FileSync for FileSyncService {
                             continue;
                         };
 
-                        debug!(?id, ?path, "Request Packet");
+                        info!(%id, path = %path.display(), "sending requested file");
 
                         let reader = match tokio::fs::File::open(&path).await {
                             Ok(reader) => reader,
@@ -147,20 +171,14 @@ impl FileSync for FileSyncService {
                             }
                         };
                         let mut buf_reader = tokio::io::BufReader::new(reader);
-                        let mut buffer = vec![0; MAX_PACKET_SIZE];
-
-                        loop {
-                            buffer.clear();
-                            match buf_reader.read(&mut buffer).await {
-                                Ok(0) => {
-                                    break;
-                                }
-                                Ok(n) => {
+                        match read_data_chunks(&mut buf_reader, MAX_PACKET_SIZE).await {
+                            Ok(chunks) => {
+                                for chunk in chunks {
                                     if let Err(err) = tx
                                         .send(Ok(Packet {
                                             r#type: PacketType::PacketData.into(),
                                             id,
-                                            data: buffer[..n].to_vec(),
+                                            data: chunk,
                                             ..Default::default()
                                         }))
                                         .await
@@ -168,14 +186,12 @@ impl FileSync for FileSyncService {
                                         error!(?err, "Error sending data packet");
                                     }
                                 }
-                                Err(err) => {
-                                    error!(?err, "Error reading file");
-                                    break;
-                                }
+                            }
+                            Err(err) => {
+                                error!(?err, "Error reading file");
                             }
                         }
 
-                        // send one with empty data to indicate end of file
                         if let Err(err) = tx
                             .send(Ok(Packet {
                                 r#type: PacketType::PacketData.into(),
@@ -193,6 +209,7 @@ impl FileSync for FileSyncService {
                     }
                     PacketType::PacketFin => {
                         info!("fin");
+                        let _ = walker.await;
                         if let Err(err) = tx
                             .send(Ok(Packet {
                                 r#type: PacketType::PacketFin.into(),
@@ -202,7 +219,7 @@ impl FileSync for FileSyncService {
                         {
                             error!(?err, "Error sending fin packet");
                         }
-                        break;
+                        return;
                     }
                     other => {
                         error!(?other, "Unexpected packet type");
@@ -210,6 +227,8 @@ impl FileSync for FileSyncService {
                     }
                 }
             }
+
+            let _ = walker.await;
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
@@ -226,12 +245,14 @@ impl FileSync for FileSyncService {
 }
 
 async fn walk(
-    root: impl AsRef<Path>,
+    root: PathBuf,
     tx: Sender<Result<Packet, Status>>,
 
     exclude_patterns: Vec<String>,
-    _include_patterns: Vec<String>,
-) -> Vec<String> {
+    include_patterns: Vec<String>,
+    follow_paths: Vec<String>,
+    files: Arc<Mutex<HashMap<u32, PathBuf>>>,
+) {
     macro_rules! send_data_packet {
         ($t:ident, $data:expr) => {
             let _ = tx
@@ -244,8 +265,8 @@ async fn walk(
         };
     }
 
-    let root = root.as_ref();
-    let mut files = vec![];
+    let root = root.as_path();
+    let mut next_id: u32 = 0;
 
     for entry in walkdir::WalkDir::new(root)
         .sort_by_file_name()
@@ -255,7 +276,12 @@ async fn walk(
                 .path()
                 .strip_prefix(root)
                 .unwrap_or_else(|_| Path::new(""));
-            should_include_path(trimmed_path, &exclude_patterns, &_include_patterns)
+            should_include_path(
+                trimmed_path,
+                &exclude_patterns,
+                &include_patterns,
+                &follow_paths,
+            )
         })
     {
         let entry = match entry {
@@ -315,7 +341,13 @@ async fn walk(
             ..Default::default()
         };
 
-        files.push(stat.path.clone());
+        if file_can_request_data(stat.mode) {
+            files
+                .lock()
+                .await
+                .insert(next_id, entry.path().to_path_buf());
+        }
+        next_id = next_id.saturating_add(1);
 
         if let Err(err) = tx
             .send(Ok(Packet {
@@ -339,14 +371,13 @@ async fn walk(
     {
         error!(?err);
     }
-
-    files
 }
 
 fn should_include_path(
     path: &Path,
     exclude_patterns: &[String],
     include_patterns: &[String],
+    follow_paths: &[String],
 ) -> bool {
     let clean_path = path_clean::clean(path);
 
@@ -357,16 +388,19 @@ fn should_include_path(
         return false;
     }
 
-    if include_patterns.is_empty() || is_root_path(&clean_path) {
+    if (include_patterns.is_empty() && follow_paths.is_empty()) || is_root_path(&clean_path) {
         return true;
     }
 
-    include_patterns.iter().any(|pattern| {
-        let pattern = path_clean::clean(pattern);
-        is_root_path(&pattern)
-            || clean_path.starts_with(&pattern)
-            || pattern.starts_with(&clean_path)
-    })
+    include_patterns
+        .iter()
+        .chain(follow_paths.iter())
+        .any(|pattern| {
+            let pattern = path_clean::clean(pattern);
+            is_root_path(&pattern)
+                || clean_path.starts_with(&pattern)
+                || pattern.starts_with(&clean_path)
+        })
 }
 
 fn path_matches_prefix(path: &Path, pattern: &str) -> bool {
@@ -382,7 +416,8 @@ fn is_root_path(path: &Path) -> bool {
 mod tests {
     use std::path::Path;
 
-    use super::should_include_path;
+    use super::{read_data_chunks, should_include_path};
+    use tokio::io::AsyncWriteExt;
 
     #[test]
     fn include_patterns_keep_parent_directories() {
@@ -390,11 +425,13 @@ mod tests {
             Path::new("src"),
             &[],
             &["src/main.rs".to_owned()],
+            &[],
         ));
         assert!(should_include_path(
             Path::new("src/main.rs"),
             &[],
             &["src/main.rs".to_owned()],
+            &[],
         ));
     }
 
@@ -404,6 +441,7 @@ mod tests {
             Path::new("tests"),
             &[],
             &["src/main.rs".to_owned()],
+            &[],
         ));
     }
 
@@ -413,6 +451,56 @@ mod tests {
             Path::new("src/generated"),
             &["src/generated".to_owned()],
             &["src".to_owned()],
+            &[],
         ));
+    }
+
+    #[test]
+    fn follow_paths_keep_requested_file_and_parents() {
+        assert!(should_include_path(
+            Path::new("."),
+            &[],
+            &[],
+            &["Dockerfile".to_owned()],
+        ));
+        assert!(should_include_path(
+            Path::new("Dockerfile"),
+            &[],
+            &[],
+            &["Dockerfile".to_owned()],
+        ));
+        assert!(!should_include_path(
+            Path::new("src"),
+            &[],
+            &[],
+            &["Dockerfile".to_owned()],
+        ));
+    }
+
+    #[test]
+    fn exclude_patterns_override_follow_paths() {
+        assert!(!should_include_path(
+            Path::new("Dockerfile"),
+            &["Dockerfile".to_owned()],
+            &[],
+            &["Dockerfile".to_owned()],
+        ));
+    }
+
+    #[tokio::test]
+    async fn read_data_chunks_reads_non_empty_input() {
+        let (mut writer, mut reader) = tokio::io::duplex(64);
+        let payload = b"FROM scratch\nLABEL smoke=\"true\"\n";
+
+        let writer_task = tokio::spawn(async move {
+            writer.write_all(payload).await.unwrap();
+            writer.shutdown().await.unwrap();
+        });
+
+        let chunks = read_data_chunks(&mut reader, 8).await.unwrap();
+        writer_task.await.unwrap();
+
+        assert_eq!(chunks.concat(), payload);
+        assert!(chunks.iter().all(|chunk| !chunk.is_empty()));
     }
 }
