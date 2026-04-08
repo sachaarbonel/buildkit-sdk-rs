@@ -18,6 +18,7 @@ use buildkit_rs_proto::moby::buildkit::v1::{
 };
 use buildkit_rs_proto::moby::buildkit::v1::{StatusRequest, StatusResponse};
 use buildkit_rs_proto::moby::filesync::v1::auth_server::AuthServer;
+use buildkit_rs_proto::moby::filesync::v1::file_send_server::FileSendServer;
 use buildkit_rs_proto::moby::filesync::v1::file_sync_server::FileSyncServer;
 use buildkit_rs_util::oci::OciBackend;
 use connhelper::{docker::docker_connect, podman::podman_connect};
@@ -58,21 +59,31 @@ pub struct SolveOptions<'a> {
     pub session: String,
     /// Pre-built LLB definition. `None` when a frontend is used instead.
     pub definition: Option<Definition<'a>>,
-    /// Frontend to use (e.g. `"dockerfile.v0"`). Empty when a definition is
-    /// provided directly.
+    /// Frontend to use (e.g. `"dockerfile.v0"`). Leave empty when providing
+    /// an LLB definition directly.
     pub frontend: String,
     /// Key-value attributes passed to the frontend.
     pub frontend_attrs: HashMap<String, String>,
+    /// Exporter to use for build results (e.g. `"docker"`, `"image"`,
+    /// `"local"`). Leave empty when no explicit exporter is needed.
+    pub exporter: String,
+    /// Key-value attributes passed to the exporter, such as image names or
+    /// output paths. These require `exporter` to be set.
+    pub exporter_attrs: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct SessionOptions {
+    /// Human-readable session name advertised to BuildKit.
     pub name: String,
+    /// Local directories exposed to the session by name.
     pub local: HashMap<String, PathBuf>,
+    /// Secrets exposed to the session by id.
     pub secrets: HashMap<String, SecretSource>,
 }
 
 pub struct Session {
+    /// Opaque BuildKit session identifier.
     pub id: String,
 }
 
@@ -131,26 +142,17 @@ impl Client {
         &mut self,
         options: SolveOptions<'_>,
     ) -> Result<SolveResponse, tonic::Status> {
-        let config = oci_spec::image::ConfigBuilder::default()
-            .user("root".to_string())
-            // .working_dir(job.working_directory.clone())
-            .env(["ABC=123".to_owned()])
-            .cmd(["/bin/bash".to_owned()])
-            // .entrypoint(["/app/hello-world".to_owned()])
-            .build()
-            .unwrap();
+        if options.definition.is_none() && options.frontend.is_empty() {
+            return Err(tonic::Status::invalid_argument(
+                "solve requires either `definition` or `frontend`",
+            ));
+        }
 
-        let image_config = oci_spec::image::ImageConfigurationBuilder::default()
-            .config(config)
-            .build()
-            .unwrap();
-
-        let json = serde_json::to_string(&image_config).unwrap();
-
-        let mut frontend_attrs: HashMap<String, String> = [("no-cache".to_owned(), "".to_owned())]
-            .into_iter()
-            .collect();
-        frontend_attrs.extend(options.frontend_attrs);
+        if options.exporter.is_empty() && !options.exporter_attrs.is_empty() {
+            return Err(tonic::Status::invalid_argument(
+                "exporter attributes require `exporter` to be set",
+            ));
+        }
 
         self.control
             .solve(Request::new(
@@ -158,15 +160,10 @@ impl Client {
                     r#ref: options.id,
                     definition: options.definition.map(|d| d.into_pb()),
                     frontend: options.frontend,
-                    frontend_attrs,
+                    frontend_attrs: options.frontend_attrs,
                     session: options.session,
-                    exporter_deprecated: "docker".to_owned(),
-                    exporter_attrs_deprecated: [
-                        ("name".into(), "test".into()),
-                        ("containerimage.config".into(), json),
-                    ]
-                    .into_iter()
-                    .collect(),
+                    exporter_deprecated: options.exporter,
+                    exporter_attrs_deprecated: options.exporter_attrs,
                     ..Default::default()
                 },
             ))
@@ -197,7 +194,7 @@ impl Client {
             .await;
 
         health_reporter
-            .set_serving::<SecretsServer<SecretService>>()
+            .set_serving::<FileSendServer<FileSendService>>()
             .await;
 
         let layer = ServiceBuilder::new().trace_for_grpc().into_inner();
@@ -259,9 +256,18 @@ impl Client {
 
         let (client_read, mut client_write) = tokio::io::split(client_stream);
 
-        let mut request = Request::new(ReaderStream::new(client_read).map(|bytes| BytesMessage {
-            data: bytes.unwrap().to_vec(),
-        }));
+        let request_stream = ReaderStream::new(client_read).filter_map(|bytes| async move {
+            match bytes {
+                Ok(bytes) => Some(BytesMessage {
+                    data: bytes.to_vec(),
+                }),
+                Err(err) => {
+                    tracing::error!(?err, "Error reading session stream");
+                    None
+                }
+            }
+        });
+        let mut request = Request::new(request_stream);
 
         let id = random_id();
 

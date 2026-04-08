@@ -101,11 +101,51 @@ impl FileSync for FileSyncService {
                 match packet.r#type() {
                     PacketType::PacketReq => {
                         let id = packet.id;
-                        let path = context_path.join(&files[id as usize]);
+                        let Some(path) = usize::try_from(id)
+                            .ok()
+                            .and_then(|idx| files.get(idx))
+                            .map(|path| context_path.join(path))
+                        else {
+                            let message = format!("requested file id {id} is out of range");
+                            error!(%id, "{message}");
+                            if let Err(err) = tx
+                                .send(Ok(Packet {
+                                    r#type: PacketType::PacketErr.into(),
+                                    id,
+                                    data: message.into_bytes(),
+                                    ..Default::default()
+                                }))
+                                .await
+                            {
+                                error!(?err, "Error sending error packet");
+                            }
+                            continue;
+                        };
 
                         debug!(?id, ?path, "Request Packet");
 
-                        let reader = tokio::fs::File::open(&path).await.unwrap();
+                        let reader = match tokio::fs::File::open(&path).await {
+                            Ok(reader) => reader,
+                            Err(err) => {
+                                let message = format!(
+                                    "failed to open requested path {}: {err}",
+                                    path.display()
+                                );
+                                error!(?err, path = %path.display(), "Error opening file");
+                                if let Err(send_err) = tx
+                                    .send(Ok(Packet {
+                                        r#type: PacketType::PacketErr.into(),
+                                        id,
+                                        data: message.into_bytes(),
+                                        ..Default::default()
+                                    }))
+                                    .await
+                                {
+                                    error!(?send_err, "Error sending error packet");
+                                }
+                                continue;
+                            }
+                        };
                         let mut buf_reader = tokio::io::BufReader::new(reader);
                         let mut buffer = vec![0; MAX_PACKET_SIZE];
 
@@ -211,14 +251,11 @@ async fn walk(
         .sort_by_file_name()
         .into_iter()
         .filter_entry(|entry| {
-            // Very primitive filtering
-            // TODO: replace with real matching based on https://github.com/moby/patternmatcher/blob/main/patternmatcher.go
-            let trimmed_path = entry.path().strip_prefix(root).unwrap();
-            let clean_path = path_clean::clean(trimmed_path);
-
-            !exclude_patterns
-                .iter()
-                .any(|pattern| clean_path.starts_with(pattern))
+            let trimmed_path = entry
+                .path()
+                .strip_prefix(root)
+                .unwrap_or_else(|_| Path::new(""));
+            should_include_path(trimmed_path, &exclude_patterns, &_include_patterns)
         })
     {
         let entry = match entry {
@@ -304,4 +341,78 @@ async fn walk(
     }
 
     files
+}
+
+fn should_include_path(
+    path: &Path,
+    exclude_patterns: &[String],
+    include_patterns: &[String],
+) -> bool {
+    let clean_path = path_clean::clean(path);
+
+    if exclude_patterns
+        .iter()
+        .any(|pattern| path_matches_prefix(&clean_path, pattern))
+    {
+        return false;
+    }
+
+    if include_patterns.is_empty() || is_root_path(&clean_path) {
+        return true;
+    }
+
+    include_patterns.iter().any(|pattern| {
+        let pattern = path_clean::clean(pattern);
+        is_root_path(&pattern)
+            || clean_path.starts_with(&pattern)
+            || pattern.starts_with(&clean_path)
+    })
+}
+
+fn path_matches_prefix(path: &Path, pattern: &str) -> bool {
+    let pattern = path_clean::clean(pattern);
+    is_root_path(&pattern) || path.starts_with(&pattern)
+}
+
+fn is_root_path(path: &Path) -> bool {
+    path.as_os_str().is_empty() || path == Path::new(".")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::should_include_path;
+
+    #[test]
+    fn include_patterns_keep_parent_directories() {
+        assert!(should_include_path(
+            Path::new("src"),
+            &[],
+            &["src/main.rs".to_owned()],
+        ));
+        assert!(should_include_path(
+            Path::new("src/main.rs"),
+            &[],
+            &["src/main.rs".to_owned()],
+        ));
+    }
+
+    #[test]
+    fn include_patterns_filter_unrelated_paths() {
+        assert!(!should_include_path(
+            Path::new("tests"),
+            &[],
+            &["src/main.rs".to_owned()],
+        ));
+    }
+
+    #[test]
+    fn exclude_patterns_override_includes() {
+        assert!(!should_include_path(
+            Path::new("src/generated"),
+            &["src/generated".to_owned()],
+            &["src".to_owned()],
+        ));
+    }
 }

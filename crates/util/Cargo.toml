@@ -1,12 +1,17 @@
 [package]
-name = "buildkit-rs-util"
-description = "BuildKit utilities for Rust"
+name = "buildkit-sdk-util"
+description = "Lightweight utilities shared across the BuildKit Rust SDK"
 version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 license.workspace = true
 repository.workspace = true
+documentation = "https://docs.rs/buildkit-sdk-util"
+readme = "README.md"
+
+[lib]
+name = "buildkit_rs_util"
 
 # This crate should not have any dependencies, this restriction 
 # prevents this crate from becoming a dumping ground and makes 

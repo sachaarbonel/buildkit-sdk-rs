@@ -6,7 +6,7 @@
 //! 3. Serializes the definition and writes it to stdout
 //!
 //! Usage:
-//!   cargo run --example hello_world --package buildkit-rs-llb | \
+//!   cargo run --example hello_world --package buildkit-sdk-llb | \
 //!     buildctl build --progress plain --no-cache
 
 use buildkit_rs_llb::state::*;

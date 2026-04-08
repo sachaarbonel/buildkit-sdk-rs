@@ -5,7 +5,7 @@
 //! writes the output.
 //!
 //! Usage:
-//!   cargo run --example git_source --package buildkit-rs-llb | \
+//!   cargo run --example git_source --package buildkit-sdk-llb | \
 //!     buildctl build --progress plain --no-cache
 
 use buildkit_rs_llb::state::*;

@@ -4,6 +4,9 @@
 //! re-exports all sub-crates so users can work from a single dependency.
 //! Each sub-crate can also be used independently for finer-grained control.
 //!
+//! Published as the `buildkit-sdk-rs` package and imported in Rust as
+//! `buildkit_sdk_rs`.
+//!
 //! ## Architecture
 //!
 //! The SDK mirrors the Go BuildKit client library and exposes three key layers:
@@ -47,9 +50,22 @@
 //!
 //! let id = buildkit_sdk_rs::client::random_id();
 //! let state = image("alpine:latest").run(shlex("echo hello")).root();
-//! // Serialize the state into a Definition and submit
-//! // let definition = buildkit_sdk_rs::llb::Definition::new(state.output().unwrap().clone());
-//! // client.solve(SolveOptions { id, session: session.id, definition }).await?;
+//!
+//! let definition = buildkit_sdk_rs::llb::Definition::new(
+//!     state.output().expect("run has an output").clone(),
+//! );
+//!
+//! let _response = client.solve(SolveOptions {
+//!     id,
+//!     session: session.id,
+//!     definition: Some(definition),
+//!     exporter: "docker".into(),
+//!     exporter_attrs: std::collections::HashMap::from([(
+//!         "name".into(),
+//!         "example:latest".into(),
+//!     )]),
+//!     ..Default::default()
+//! }).await?;
 //! # Ok(())
 //! # }
 //! ```

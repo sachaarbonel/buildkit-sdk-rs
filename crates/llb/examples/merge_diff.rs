@@ -7,7 +7,7 @@
 //! - Diff: computes the difference between two filesystem states
 //!
 //! Usage:
-//!   cargo run --example merge_diff --package buildkit-rs-llb | \
+//!   cargo run --example merge_diff --package buildkit-sdk-llb | \
 //!     buildctl build --progress plain --no-cache
 
 use buildkit_rs_llb::state::*;

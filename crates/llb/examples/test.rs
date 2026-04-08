@@ -1,7 +1,7 @@
 //! Simple test example.
 //!
 //! Usage:
-//!   cargo run --example test --package buildkit-rs-llb | \
+//!   cargo run --example test --package buildkit-sdk-llb | \
 //!     buildctl build --progress plain --no-cache
 
 use buildkit_rs_llb::state::*;

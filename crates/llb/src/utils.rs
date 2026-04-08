@@ -110,7 +110,7 @@ pub mod test {
             let mut context = Context::default();
             let serialized = $op.serialize(&mut context).unwrap();
 
-            $(crate::check_op_property!(serialized, context, $name, $value));*
+            $($crate::check_op_property!(serialized, context, $name, $value));*
         }};
     }
 
@@ -167,13 +167,13 @@ pub mod test {
                 .collect::<Vec<_>>();
 
             caps.sort();
-            assert_eq!(caps, crate::utils::test::to_vec($value));
+            assert_eq!(caps, $crate::utils::test::to_vec($value));
         }};
 
         ($serialized:expr, $context:expr, description, $value:expr) => {
             assert_eq!(
                 $serialized.metadata.description,
-                crate::utils::test::to_map($value),
+                $crate::utils::test::to_map($value),
             );
         };
 

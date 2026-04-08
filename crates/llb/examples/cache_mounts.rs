@@ -5,7 +5,7 @@
 //! cargo, npm, etc.) to speed up repeated builds.
 //!
 //! Usage:
-//!   cargo run --example cache_mounts --package buildkit-rs-llb | \
+//!   cargo run --example cache_mounts --package buildkit-sdk-llb | \
 //!     buildctl build --progress plain --no-cache
 
 use buildkit_rs_llb::state::*;

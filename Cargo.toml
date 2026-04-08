@@ -1,23 +1,28 @@
 [package]
 name = "buildkit-sdk-rs"
-description = "Rust SDK for BuildKit — programmatically construct LLB build graphs and submit them to a BuildKit daemon"
+description = "Rust SDK for BuildKit: construct LLB graphs and submit builds to buildkitd"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
+repository.workspace = true
+documentation = "https://docs.rs/buildkit-sdk-rs"
+readme = "README.md"
+keywords = ["buildkit", "llb", "docker", "containers", "grpc"]
+categories = ["api-bindings", "development-tools"]
 
 [lib]
 name = "buildkit_sdk_rs"
 path = "src/lib.rs"
 
 [dependencies]
-buildkit-rs-client = { path = "crates/client" }
-buildkit-rs-ignore = { version = "0.1.0", path = "crates/ignore" }
-buildkit-rs-llb = { path = "crates/llb" }
-buildkit-rs-proto = { path = "crates/proto" }
-buildkit-rs-reference = { path = "crates/reference" }
-buildkit-rs-util = { path = "crates/util" }
+buildkit-rs-client = { package = "buildkit-sdk-client", version = "0.1.0", path = "crates/client" }
+buildkit-rs-ignore = { package = "buildkit-sdk-ignore", version = "0.1.0", path = "crates/ignore" }
+buildkit-rs-llb = { package = "buildkit-sdk-llb", version = "0.1.0", path = "crates/llb" }
+buildkit-rs-proto = { package = "buildkit-sdk-proto", version = "0.1.0", path = "crates/proto" }
+buildkit-rs-reference = { package = "buildkit-sdk-reference", version = "0.1.0", path = "crates/reference" }
+buildkit-rs-util = { package = "buildkit-sdk-util", version = "0.1.0", path = "crates/util" }
 
 [workspace]
 resolver = "2"
@@ -26,7 +31,7 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-authors = ["Grant Gurvis"]
+authors = ["Sacha Arbonel <sacha.arbonel@hotmail.fr>"]
 homepage = "https://github.com/sachaarbonel/buildkit-sdk-rs"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/sachaarbonel/buildkit-sdk-rs"

@@ -1,12 +1,17 @@
 [package]
-name = "buildkit-rs-proto"
-description = "BuildKit gRPC API"
+name = "buildkit-sdk-proto"
+description = "Generated BuildKit protobuf and gRPC types for Rust"
 version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 license.workspace = true
 repository.workspace = true
+documentation = "https://docs.rs/buildkit-sdk-proto"
+readme = "README.md"
+
+[lib]
+name = "buildkit_rs_proto"
 
 [dependencies]
 prost = "0.14"

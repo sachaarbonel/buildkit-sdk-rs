@@ -1,16 +1,21 @@
 [package]
-name = "buildkit-rs-llb"
-description = "LLB library in Rust"
+name = "buildkit-sdk-llb"
+description = "Rust builders for BuildKit LLB graphs and state-based operations"
 version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 license.workspace = true
 repository.workspace = true
+documentation = "https://docs.rs/buildkit-sdk-llb"
+readme = "README.md"
+
+[lib]
+name = "buildkit_rs_llb"
 
 [dependencies]
-buildkit-rs-proto = { path = "../proto" }
-buildkit-rs-reference = { version = "0.1.0", path = "../reference" }
+buildkit-rs-proto = { package = "buildkit-sdk-proto", version = "0.1.0", path = "../proto" }
+buildkit-rs-reference = { package = "buildkit-sdk-reference", version = "0.1.0", path = "../reference" }
 camino = "1.1.4"
 prost = "0.14"
 serde_json = "1.0.94"

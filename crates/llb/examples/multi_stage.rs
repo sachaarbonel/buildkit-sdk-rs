@@ -8,7 +8,7 @@
 //! dependencies.
 //!
 //! Usage:
-//!   cargo run --example multi_stage --package buildkit-rs-llb | \
+//!   cargo run --example multi_stage --package buildkit-sdk-llb | \
 //!     buildctl build --progress plain --no-cache
 
 use buildkit_rs_llb::state::*;

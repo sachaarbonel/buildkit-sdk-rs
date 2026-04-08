@@ -5,7 +5,7 @@
 //! creating symlinks, and removing files.
 //!
 //! Usage:
-//!   cargo run --example file_operations --package buildkit-rs-llb | \
+//!   cargo run --example file_operations --package buildkit-sdk-llb | \
 //!     buildctl build --progress plain --no-cache
 
 use buildkit_rs_llb::state::*;

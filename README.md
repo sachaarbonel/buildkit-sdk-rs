@@ -1,84 +1,177 @@
-# buildkit-rs
+# buildkit-sdk-rs
 
-According to the [buildkit repo](https://github.com/moby/buildkit) buildkit is:
+This fork publishes under the `buildkit-sdk-*` package names on crates.io.
 
-> a toolkit for converting source code to build artifacts in an efficient,
-> expressive and repeatable manner
+`buildkit-sdk-rs` is a Rust SDK for [BuildKit](https://github.com/moby/buildkit).
+It provides Rust-first APIs for constructing LLB graphs, working with the
+BuildKit protobuf surface, and talking to a running `buildkitd` daemon.
 
-This is a Rust client library for buildkit.
+## What You Get
 
-## Crates
+- A high-level state-based LLB builder inspired by BuildKit's Go API
+- Lower-level LLB operation types for building graphs directly
+- Generated protobuf and gRPC types for BuildKit services
+- An async client crate for connecting to `buildkitd`
+- Supporting utilities for image references, ignore files, and OCI backends
 
-- [buildkit-rs](/) - The meta crate for the buildkit-rs project, it contains all
-  the other crates reexported with no other functionality
-- [buildkit-rs-llb](/crates/llb) - The low level buildkit client library
-- [buildkit-rs-proto](/crates/proto) - The buildkit protobuf definitions
-- [buildkit-rs-util](/crates/util) - Utilities for building applications that
-  use buildkit
+## Package Names
 
-### Planned crates
+The published crates use the `buildkit-sdk-*` package names:
 
-- [buildkit-rs-client](/) - A high level client library for buildkit exposing a
-  similar API to the Go client
-- [buildkit-rs-dockerfile](/) - A library for parsing and converting Dockerfiles
-  to LLB (this is mostly for validation and testing, not for production use)
+- `buildkit-sdk-rs`
+- `buildkit-sdk-llb`
+- `buildkit-sdk-client`
+- `buildkit-sdk-proto`
+- `buildkit-sdk-reference`
+- `buildkit-sdk-ignore`
+- `buildkit-sdk-util`
 
+The Rust crate names stay unchanged for imports:
 
-## Testing
+- `buildkit_sdk_rs`
+- `buildkit_rs_llb`
+- `buildkit_rs_client`
+- `buildkit_rs_proto`
+- `buildkit_rs_reference`
+- `buildkit_rs_ignore`
+- `buildkit_rs_util`
 
-```shell
-docker run -d --name buildkitd --privileged moby/buildkit:latest 
-export BUILDKIT_HOST=docker-container://buildkitd
-cargo run --example test --package buildkit-rs-llb | buildctl b --progress plain --no-cache
+## How BuildKit Works
+
+If you have not used BuildKit before, the rough mental model is:
+
+1. You describe a build as a graph instead of a shell script.
+2. BuildKit turns that graph into an internal format called LLB.
+3. A BuildKit daemon (`buildkitd`) solves that graph, reusing cache where it can.
+4. The result is exported somewhere useful, such as a Docker image, an OCI image,
+   a local directory, or another BuildKit consumer.
+
+In practice there are two common ways to drive it:
+
+- Use a frontend such as `dockerfile.v0`, where BuildKit reads a Dockerfile and
+  produces the LLB graph for you.
+- Build the LLB graph directly in code, which is what the `buildkit-sdk-llb`
+  crate is for.
+
+This workspace maps to those pieces like this:
+
+- `buildkit-sdk-llb` builds LLB graphs in Rust.
+- `buildkit-sdk-proto` exposes the generated protobuf and gRPC types.
+- `buildkit-sdk-client` connects to `buildkitd`, opens sessions, and submits
+  solve requests.
+
+Sessions are the mechanism BuildKit uses to access local build contexts,
+secrets, auth, and file transfer while a solve is running.
+
+## Quick Start
+
+```rust
+use buildkit_sdk_rs::llb::{image, shlex};
+
+fn main() {
+    let def = image("alpine:latest")
+        .run(shlex("echo hello from BuildKit"))
+        .root()
+        .marshal();
+
+    buildkit_sdk_rs::llb::write_to(&def, &mut std::io::stdout());
+}
 ```
 
-## QA
+Pipe the generated definition into `buildctl`:
 
-### What are the goals of this project?
+```shell
+cargo run --example hello_world --package buildkit-sdk-llb | \
+  buildctl build --progress plain --no-cache
+```
 
-#### Goals
+## Workspace Crates
 
-In order of importance:
+- `buildkit-sdk-rs`: top-level facade crate re-exporting the workspace crates
+- `buildkit-sdk-llb`: LLB graph builders and state API
+- `buildkit-sdk-client`: async BuildKit client and session helpers
+- `buildkit-sdk-proto`: generated protobuf and gRPC types
+- `buildkit-sdk-reference`: image reference parsing utilities
+- `buildkit-sdk-ignore`: `.dockerignore` and `.containerignore` parsing
+- `buildkit-sdk-util`: shared utilities such as OCI backend selection
 
-- Provide a simple, safe, and fast buildkit client library for Rust
-- Make the API idiomatic Rust
-- Provide other utilities for building applications that use buildkit in Rust
-- Keeping the API similar to the buildkit Go client API
-- Keeping the code modular as to allow easy opt-in for features
-- No unsafe code
+## Running Against BuildKit
 
-#### Non-goals (non-exhaustive)
+Start a local daemon:
 
-- Provide a buildkit daemon implementation
-- Provide a CLI for buildkit
-- Provide a production ready Dockerfile llb converter
+```shell
+docker run -d --name buildkitd --privileged moby/buildkit:latest
+```
 
-In short, this project is not trying to replace buildkit, but rather provide a
-Rust client library for buildkit.
+Run tests and lints:
 
-### What about the [rust-buildkit](https://github.com/denzp/rust-buildkit)
+```shell
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+```
 
-It is a similar project, we did draw some inspiration from its API, but it is
-not maintained anymore and it is not compatible with the latest buildkit
-version.
+Try the example programs:
 
-### Why not use the [buildkit Go client](https://github.com/moby/buildkit) directly?
+```shell
+cargo run --example hello_world --package buildkit-sdk-llb | \
+  buildctl build --progress plain --no-cache
 
-The Go client is a great library, but it is not easy to use in Rust. A native
-Rust client library is much easier to use and it is much faster for our use
-case. We are all in on Rust but still want to leverage the buildkit ecosystem.
+cargo run --example client_connect --package buildkit-sdk-client
+```
+
+## Publishing This Fork
+
+Authenticate with crates.io first:
+
+```shell
+cargo login
+```
+
+Or set `CARGO_REGISTRY_TOKEN` in your environment.
+
+Publish in dependency order:
+
+```shell
+cargo publish -p buildkit-sdk-reference
+cargo publish -p buildkit-sdk-proto
+cargo publish -p buildkit-sdk-util
+cargo publish -p buildkit-sdk-ignore
+cargo publish -p buildkit-sdk-llb
+cargo publish -p buildkit-sdk-client
+cargo publish -p buildkit-sdk-rs
+```
+
+If you want to verify before uploading, use dry runs:
+
+```shell
+cargo publish --dry-run -p buildkit-sdk-reference
+cargo publish --dry-run -p buildkit-sdk-rs
+```
+
+The top-level `buildkit-sdk-rs` crate will not publish successfully until its
+dependent workspace crates are already available on crates.io.
+
+## Goals
+
+- Provide an idiomatic Rust SDK for BuildKit
+- Stay close enough to the Go API to make BuildKit concepts familiar
+- Keep the workspace modular so users can depend on only the crates they need
+- Avoid unsafe code in the public implementation
+
+## Status
+
+The LLB layer and the generated protocol surface are the most mature parts of
+the workspace. The client crate is usable, but its API surface is still fairly
+close to the wire format and will likely continue to evolve.
 
 ## License
 
-All contributions are licensed under either Apache-2.0 OR MIT. If you contribute
-any code you agree to license it under the same terms as the project.
+Licensed under either `Apache-2.0` or `MIT`.
 
-Any files in [`crates/proto/vendor`](/crates/proto/vendor/) under their original license.
+Vendored protobuf files under `crates/proto/vendor` remain under their original
+licenses.
 
 ## Contributing
 
-Any contributions are welcome! If you are interested in contributing, please
-open an issue or a PR as soon as possible so we can discuss it and ensure it
-fits the goals of the project + we can avoid duplicate work.
-
-We also welcome discussions in the project's GitHub issues and pull requests.
+Issues and pull requests are welcome. If you plan to add a larger feature, open
+an issue first so the API shape can be discussed before implementation.

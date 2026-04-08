@@ -1,13 +1,13 @@
 //! Client connection example.
 //!
 //! This example demonstrates connecting to a running BuildKit daemon
-//! using the buildkit-rs client library and querying basic information.
+//! using the BuildKit client crate and querying basic information.
 //!
 //! Prerequisites:
 //!   docker run -d --name buildkitd --privileged moby/buildkit:latest
 //!
 //! Usage:
-//!   cargo run --example client_connect --package buildkit-rs-client
+//!   cargo run --example client_connect --package buildkit-sdk-client
 
 use buildkit_rs_client::Client;
 use buildkit_rs_util::oci::OciBackend;

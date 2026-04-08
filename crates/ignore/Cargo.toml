@@ -1,12 +1,17 @@
 [package]
-name = "buildkit-rs-ignore"
-description = "Parse .dockerignore and .containerignore files"
+name = "buildkit-sdk-ignore"
+description = "Parse .dockerignore and .containerignore files for BuildKit contexts"
 version = "0.1.0"
 edition.workspace = true
 authors.workspace = true
 homepage.workspace = true
 license.workspace = true
 repository.workspace = true
+documentation = "https://docs.rs/buildkit-sdk-ignore"
+readme = "README.md"
+
+[lib]
+name = "buildkit_rs_ignore"
 
 [dependencies]
 path-clean = "1.0.1"

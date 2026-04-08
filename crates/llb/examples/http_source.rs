@@ -4,7 +4,7 @@
 //! it in a build step.
 //!
 //! Usage:
-//!   cargo run --example http_source --package buildkit-rs-llb | \
+//!   cargo run --example http_source --package buildkit-sdk-llb | \
 //!     buildctl build --progress plain --no-cache
 
 use buildkit_rs_llb::state::*;

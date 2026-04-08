@@ -70,7 +70,7 @@ mod tests {
     #[test]
     fn test_clone_and_partial_eq() {
         let backend = OciBackend::Docker;
-        let cloned = backend.clone();
+        let cloned = backend;
         assert_eq!(backend, cloned);
 
         let podman = OciBackend::Podman;

@@ -51,6 +51,43 @@ bitflags! {
     }
 }
 
+impl FileMode {
+    pub(crate) fn from_metadata(metadata: &Metadata) -> Self {
+        let mut mode = Self::empty();
+
+        #[cfg(unix)]
+        let unix_mode = {
+            use std::os::unix::fs::MetadataExt;
+            metadata.mode()
+        };
+
+        // Trying to emulate the behavior of go on windows where it makes fake mode bits
+        #[cfg(windows)]
+        let unix_mode = {
+            let readonly = metadata.permissions().readonly();
+            let is_dir = metadata.is_dir();
+            match (readonly, is_dir) {
+                (true, false) => 0o444,
+                (true, true) => 0o555,
+                (false, false) => 0o666,
+                (false, true) => 0o777,
+            }
+        };
+
+        mode |= FileMode::from_bits_truncate(unix_mode) & Self::MODE_PERM_MASK;
+
+        if metadata.is_dir() {
+            mode |= Self::MODE_DIR;
+        }
+
+        if metadata.is_symlink() {
+            mode |= Self::MODE_SYMLINK;
+        }
+
+        mode
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,42 +131,5 @@ mod tests {
         assert!(type_mask.contains(FileMode::MODE_IRREGULAR));
         // Permission bits should not be in type mask
         assert!(!type_mask.contains(FileMode::USER_READ));
-    }
-}
-
-impl FileMode {
-    pub(crate) fn from_metadata(metadata: &Metadata) -> Self {
-        let mut mode = Self::empty();
-
-        #[cfg(unix)]
-        let unix_mode = {
-            use std::os::unix::fs::MetadataExt;
-            metadata.mode()
-        };
-
-        // Trying to emulate the behavior of go on windows where it makes fake mode bits
-        #[cfg(windows)]
-        let unix_mode = {
-            let readonly = metadata.permissions().readonly();
-            let is_dir = metadata.is_dir();
-            match (readonly, is_dir) {
-                (true, false) => 0o444,
-                (true, true) => 0o555,
-                (false, false) => 0o666,
-                (false, true) => 0o777,
-            }
-        };
-
-        mode |= FileMode::from_bits_truncate(unix_mode) & Self::MODE_PERM_MASK;
-
-        if metadata.is_dir() {
-            mode |= Self::MODE_DIR;
-        }
-
-        if metadata.is_symlink() {
-            mode |= Self::MODE_SYMLINK;
-        }
-
-        mode
     }
 }
