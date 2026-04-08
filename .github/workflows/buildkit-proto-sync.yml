@@ -1,0 +1,63 @@
+name: Sync BuildKit Protos
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: buildkit-proto-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Check pinned BuildKit version
+        id: check
+        continue-on-error: true
+        run: cargo xtask check-protos >> "$GITHUB_OUTPUT"
+
+      - name: Fail on unexpected version check error
+        if: steps.check.outcome == 'failure' && steps.check.outputs.update_available != 'true'
+        run: exit 1
+
+      - name: Re-vendor BuildKit protos
+        if: steps.check.outputs.update_available == 'true'
+        run: cargo xtask update-protos --version "${{ steps.check.outputs.latest_version }}"
+
+      - name: Run workspace tests
+        if: steps.check.outputs.update_available == 'true'
+        run: cargo test --workspace
+
+      - name: Run workspace clippy
+        if: steps.check.outputs.update_available == 'true'
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: Create pull request
+        if: steps.check.outputs.update_available == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automation/buildkit-protos
+          commit-message: "chore(proto): update BuildKit protos to ${{ steps.check.outputs.latest_version }}"
+          delete-branch: true
+          title: "chore(proto): update BuildKit protos to ${{ steps.check.outputs.latest_version }}"
+          body: |
+            Updates the pinned BuildKit proto version from `${{ steps.check.outputs.pinned_version }}` to `${{ steps.check.outputs.latest_version }}`.
+
+            This PR was created automatically by the scheduled BuildKit proto sync workflow.

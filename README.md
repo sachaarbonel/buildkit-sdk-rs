@@ -110,6 +110,27 @@ cargo test --workspace
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
+## Maintaining BuildKit Protos
+
+The pinned upstream BuildKit tag lives in `crates/proto/BUILDKIT_VERSION`.
+
+Check whether the repo is behind the latest `moby/buildkit` release:
+
+```shell
+cargo xtask check-protos
+```
+
+Re-vendor the protobuf files for a specific BuildKit release:
+
+```shell
+cargo xtask update-protos --version v0.29.0
+```
+
+A weekly GitHub Actions workflow runs the same check, re-vendors a newer tag
+when one is available, runs the workspace tests and clippy, and opens a PR
+automatically. Maintainers should still subscribe to `moby/buildkit` releases
+for awareness.
+
 Try the example programs:
 
 ```shell

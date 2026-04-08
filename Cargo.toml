@@ -26,7 +26,7 @@ buildkit-rs-util = { package = "buildkit-sdk-util", version = "0.1.0", path = "c
 
 [workspace]
 resolver = "2"
-members = ["crates/*"]
+members = ["crates/*", "xtask"]
 
 [workspace.package]
 version = "0.1.0"

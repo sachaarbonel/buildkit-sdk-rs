@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+semver = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+ureq = { version = "2.12", features = ["json"] }

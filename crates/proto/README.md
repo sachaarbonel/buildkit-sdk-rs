@@ -19,3 +19,12 @@ let _definition = Definition::default();
 Most users will consume this crate indirectly through `buildkit-sdk-llb` or
 `buildkit-sdk-client`, but it is available directly when you need lower-level
 access to the wire format.
+
+## Maintenance
+
+The vendored BuildKit tag is pinned in `BUILDKIT_VERSION`.
+
+```shell
+cargo xtask check-protos
+cargo xtask update-protos --version v0.29.0
+```
