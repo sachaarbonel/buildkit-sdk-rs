@@ -33,3 +33,10 @@ pub use ops::source::image::ResolveMode;
 pub use ops::source::local::Local;
 pub use platform::Platform;
 pub use serialize::Definition;
+
+// Re-export high-level State API types and convenience functions at the crate root
+// so users can write `use buildkit_rs_llb::*` or `buildkit_rs_llb::image(...)`.
+pub use state::{
+    CopyOp, ExecState, FileOp, MkFileOp, MkdirOp, RmOp, RunOption, State, SymlinkOp, copy, diff,
+    git, http, image, local, merge, mkdir, mkfile, rm, scratch, shlex, symlink, write_to,
+};

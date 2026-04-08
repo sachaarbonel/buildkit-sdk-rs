@@ -1,7 +1,9 @@
 pub mod connhelper;
-pub(crate) mod error;
+pub mod error;
 pub mod session;
 pub(crate) mod util;
+
+pub use error::Error;
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -19,7 +21,6 @@ use buildkit_rs_proto::moby::filesync::v1::auth_server::AuthServer;
 use buildkit_rs_proto::moby::filesync::v1::file_sync_server::FileSyncServer;
 use buildkit_rs_util::oci::OciBackend;
 use connhelper::{docker::docker_connect, podman::podman_connect};
-use error::Error;
 use futures::stream::StreamExt;
 use hyper_util::rt::TokioIo;
 use session::filesend::FileSendService;
@@ -44,11 +45,24 @@ const HEADER_SESSION_NAME: &str = "x-docker-expose-session-name";
 const HEADER_SESSION_SHARED_KEY: &str = "x-docker-expose-session-sharedkey";
 const HEADER_SESSION_METHOD: &str = "x-docker-expose-session-grpc-method";
 
-#[derive(Debug)]
+/// Options for submitting a solve request to the BuildKit daemon.
+///
+/// Either `definition` (a pre-built LLB graph) or `frontend` (e.g.
+/// `"dockerfile.v0"`) should be provided. When using a frontend the daemon
+/// generates the LLB internally, so `definition` can be `None`.
+#[derive(Debug, Default)]
 pub struct SolveOptions<'a> {
+    /// Unique reference id for this solve.
     pub id: String,
+    /// Session id to associate with this solve.
     pub session: String,
-    pub definition: Definition<'a>,
+    /// Pre-built LLB definition. `None` when a frontend is used instead.
+    pub definition: Option<Definition<'a>>,
+    /// Frontend to use (e.g. `"dockerfile.v0"`). Empty when a definition is
+    /// provided directly.
+    pub frontend: String,
+    /// Key-value attributes passed to the frontend.
+    pub frontend_attrs: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -133,14 +147,18 @@ impl Client {
 
         let json = serde_json::to_string(&image_config).unwrap();
 
+        let mut frontend_attrs: HashMap<String, String> = [("no-cache".to_owned(), "".to_owned())]
+            .into_iter()
+            .collect();
+        frontend_attrs.extend(options.frontend_attrs);
+
         self.control
             .solve(Request::new(
                 buildkit_rs_proto::moby::buildkit::v1::SolveRequest {
                     r#ref: options.id,
-                    definition: Some(options.definition.into_pb()),
-                    frontend_attrs: [("no-cache".to_owned(), "".to_owned())]
-                        .into_iter()
-                        .collect(),
+                    definition: options.definition.map(|d| d.into_pb()),
+                    frontend: options.frontend,
+                    frontend_attrs,
                     session: options.session,
                     exporter_deprecated: "docker".to_owned(),
                     exporter_attrs_deprecated: [
@@ -149,12 +167,6 @@ impl Client {
                     ]
                     .into_iter()
                     .collect(),
-                    // frontend: todo!(),
-                    // cache: todo!(),
-                    // entitlements: todo!(),
-                    // frontend_inputs: todo!(),
-                    // internal: todo!(),
-                    // source_policy: todo!(),
                     ..Default::default()
                 },
             ))

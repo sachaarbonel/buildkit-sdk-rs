@@ -1,11 +1,15 @@
 [package]
-name = "buildkit-rs"
-description = "Rust client for BuildKit"
+name = "buildkit-sdk-rs"
+description = "Rust SDK for BuildKit — programmatically construct LLB build graphs and submit them to a BuildKit daemon"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
+
+[lib]
+name = "buildkit_sdk_rs"
+path = "src/lib.rs"
 
 [dependencies]
 buildkit-rs-client = { path = "crates/client" }
