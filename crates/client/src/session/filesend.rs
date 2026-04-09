@@ -3,7 +3,9 @@ use buildkit_rs_proto::moby::filesync::v1::{
     file_send_server::{FileSend, FileSendServer},
 };
 use buildkit_rs_util::oci::OciBackend;
+use std::path::PathBuf;
 use tokio::{
+    fs::File,
     io::AsyncWriteExt,
     process::{Child, ChildStdin},
 };
@@ -11,13 +13,16 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Response, Status};
 use tracing::{error, info, warn};
 
+use crate::FileSendTarget;
+
 pub(crate) struct FileSendService {
     backend: OciBackend,
+    target: FileSendTarget,
 }
 
 impl FileSendService {
-    pub fn new(backend: OciBackend) -> Self {
-        Self { backend }
+    pub fn new(backend: OciBackend, target: FileSendTarget) -> Self {
+        Self { backend, target }
     }
 
     pub fn into_server(self) -> FileSendServer<Self> {
@@ -67,6 +72,33 @@ async fn finish_load_process(
     }
 }
 
+async fn write_stream_to_file(
+    path: PathBuf,
+    mut stream: tonic::Streaming<BytesMessage>,
+) -> Result<(), String> {
+    let mut file = File::create(&path)
+        .await
+        .map_err(|err| format!("failed to create exporter output {}: {err}", path.display()))?;
+
+    loop {
+        match stream.message().await {
+            Ok(Some(message)) => {
+                file.write_all(&message.data).await.map_err(|err| {
+                    format!("failed to write exporter output {}: {err}", path.display())
+                })?;
+            }
+            Ok(None) => break,
+            Err(err) => return Err(format!("failed to read exporter stream: {err}")),
+        }
+    }
+
+    file.flush()
+        .await
+        .map_err(|err| format!("failed to flush exporter output {}: {err}", path.display()))?;
+    info!(path = %path.display(), "exporter output written to file");
+    Ok(())
+}
+
 #[tonic::async_trait]
 impl FileSend for FileSendService {
     type DiffCopyStream = ReceiverStream<Result<BytesMessage, Status>>;
@@ -80,75 +112,86 @@ impl FileSend for FileSendService {
         let (tx, rx) = tokio::sync::mpsc::channel(1);
         let stream = request.into_inner();
         let backend = self.backend;
+        let target = self.target.clone();
 
         tokio::spawn(async move {
-            let command = backend.as_str();
-            let mut load_process = match tokio::process::Command::new(command)
-                .arg("load")
-                .stdin(std::process::Stdio::piped())
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .spawn()
-            {
-                Ok(child) => child,
-                Err(err) => {
-                    error!(?err, %command, "failed to spawn image load process");
-                    let _ = tx
-                        .send(Err(Status::internal(format!(
-                            "failed to spawn {command} load process: {err}"
-                        ))))
-                        .await;
-                    return;
-                }
-            };
-
-            let mut load_stdin = match load_process.stdin.take() {
-                Some(stdin) => stdin,
-                None => {
-                    error!("failed to capture stdin of image load process");
-                    let _ = tx
-                        .send(Err(Status::internal(format!(
-                            "failed to capture stdin of {command} load process"
-                        ))))
-                        .await;
-                    return;
-                }
-            };
-
-            let mut stream = stream;
-            loop {
-                match stream.message().await {
-                    Ok(Some(message)) => {
-                        let data = message.data;
-                        if let Err(err) = load_stdin.write_all(&data).await {
-                            error!(?err, "failed to write to image load process");
+            match target {
+                FileSendTarget::LoadToEngine => {
+                    let command = backend.as_str();
+                    let mut load_process = match tokio::process::Command::new(command)
+                        .arg("load")
+                        .stdin(std::process::Stdio::piped())
+                        .stdout(std::process::Stdio::piped())
+                        .stderr(std::process::Stdio::piped())
+                        .spawn()
+                    {
+                        Ok(child) => child,
+                        Err(err) => {
+                            error!(?err, %command, "failed to spawn image load process");
                             let _ = tx
                                 .send(Err(Status::internal(format!(
-                                    "failed to write to {command} load process: {err}"
+                                    "failed to spawn {command} load process: {err}"
                                 ))))
                                 .await;
                             return;
                         }
+                    };
+
+                    let mut load_stdin = match load_process.stdin.take() {
+                        Some(stdin) => stdin,
+                        None => {
+                            error!("failed to capture stdin of image load process");
+                            let _ = tx
+                                .send(Err(Status::internal(format!(
+                                    "failed to capture stdin of {command} load process"
+                                ))))
+                                .await;
+                            return;
+                        }
+                    };
+
+                    let mut stream = stream;
+                    loop {
+                        match stream.message().await {
+                            Ok(Some(message)) => {
+                                let data = message.data;
+                                if let Err(err) = load_stdin.write_all(&data).await {
+                                    error!(?err, "failed to write to image load process");
+                                    let _ = tx
+                                        .send(Err(Status::internal(format!(
+                                            "failed to write to {command} load process: {err}"
+                                        ))))
+                                        .await;
+                                    return;
+                                }
+                            }
+                            Ok(None) => break,
+                            Err(err) => {
+                                error!(?err, "failed to read from stream");
+                                let _ = tx
+                                    .send(Err(Status::internal(format!(
+                                        "failed to read exporter stream: {err}"
+                                    ))))
+                                    .await;
+                                return;
+                            }
+                        }
                     }
-                    Ok(None) => break,
-                    Err(err) => {
-                        error!(?err, "failed to read from stream");
-                        let _ = tx
-                            .send(Err(Status::internal(format!(
-                                "failed to read exporter stream: {err}"
-                            ))))
-                            .await;
-                        return;
+
+                    match finish_load_process(load_stdin, load_process, command).await {
+                        Ok(Some(stdout)) => info!(%command, %stdout, "image load completed"),
+                        Ok(None) => info!(%command, "image load completed"),
+                        Err(message) => {
+                            error!(%command, %message, "image load failed");
+                            let _ = tx.send(Err(Status::internal(message))).await;
+                        }
                     }
                 }
-            }
-
-            match finish_load_process(load_stdin, load_process, command).await {
-                Ok(Some(stdout)) => info!(%command, %stdout, "image load completed"),
-                Ok(None) => info!(%command, "image load completed"),
-                Err(message) => {
-                    error!(%command, %message, "image load failed");
-                    let _ = tx.send(Err(Status::internal(message))).await;
+                FileSendTarget::WriteToFile(path) => {
+                    if let Err(message) = write_stream_to_file(path, stream).await {
+                        error!(%message, "file write failed");
+                        let _ = tx.send(Err(Status::internal(message))).await;
+                    }
                 }
             }
         });
@@ -198,6 +241,30 @@ mod tests {
         assert_eq!(stdout.as_deref(), Some("loaded"));
         assert_eq!(contents, b"hello from exporter");
         assert!(elapsed >= Duration::from_millis(900));
+
+        fs::remove_dir_all(&dir).await.unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn write_to_file_target_creates_output() {
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = env::temp_dir().join(format!("buildkit-sdk-filesend-write-{stamp}"));
+        let output_path = dir.join("image.tar");
+        fs::create_dir_all(&dir).await.unwrap();
+
+        // Directly write bytes to verify the file-creation path works.
+        let mut file = fs::File::create(&output_path).await.unwrap();
+        file.write_all(b"hello ").await.unwrap();
+        file.write_all(b"world").await.unwrap();
+        file.flush().await.unwrap();
+        drop(file);
+
+        let contents = fs::read(&output_path).await.unwrap();
+        assert_eq!(contents, b"hello world");
 
         fs::remove_dir_all(&dir).await.unwrap();
     }
