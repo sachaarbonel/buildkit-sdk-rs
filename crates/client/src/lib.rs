@@ -80,6 +80,15 @@ pub struct SessionOptions {
     pub local: HashMap<String, PathBuf>,
     /// Secrets exposed to the session by id.
     pub secrets: HashMap<String, SecretSource>,
+    /// How exporter byte streams should be handled on the client side.
+    pub file_send_target: FileSendTarget,
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum FileSendTarget {
+    #[default]
+    LoadToEngine,
+    WriteToFile(PathBuf),
 }
 
 pub struct Session {
@@ -178,7 +187,7 @@ impl Client {
 
         let auth = AuthService::new().into_server();
         let file_sync = FileSyncService::new(options.local).into_server();
-        let file_send = FileSendService::new(self.backend).into_server();
+        let file_send = FileSendService::new(self.backend, options.file_send_target).into_server();
         let secret = SecretService::new(options.secrets).into_server();
 
         health_reporter
